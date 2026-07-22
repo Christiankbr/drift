@@ -40,21 +40,51 @@ jobs:
       - name: Lint
         run: cargo clippy -- -D warnings
 
-  release-build:
-    runs-on: ubuntu-latest
+  release:
+    runs-on: ${{ matrix.os }}
     needs: build-and-test
-    if: github.ref == 'refs/heads/main'
+    if: startsWith(github.ref, 'refs/tags/v')
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: drift-tracker-linux-amd64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: drift-tracker-macos-amd64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: drift-tracker-windows-amd64.exe
+
     steps:
       - uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xdotool x11-utils
+
       - name: Build release
         run: cargo build --release --verbose
 
-      - name: Upload binary
-        uses: actions/upload-artifact@v4
+      - name: Rename binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          copy target\release\drift-tracker.exe target\release\${{ matrix.artifact }}
+
+      - name: Rename binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cp target/release/drift-tracker target/release/${{ matrix.artifact }}
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: drift-linux-amd64
-          path: target/release/drift
+          files: target/release/${{ matrix.artifact }}
+          draft: false
+          prerelease: false

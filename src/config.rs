@@ -12,6 +12,12 @@ pub struct Config {
     pub categories: CategoryRules,
     #[serde(default)]
     pub focus_block: Vec<String>,
+    #[serde(default = "default_streak_goal")]
+    pub streak_goal_mins: u64,
+}
+
+fn default_streak_goal() -> u64 {
+    90
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -35,6 +41,7 @@ impl Default for Config {
             switching_cost_mins: 23,
             categories: CategoryRules::default(),
             focus_block: vec![],
+            streak_goal_mins: 90,
         }
     }
 }
@@ -246,7 +253,27 @@ impl Config {
         if self.switching_cost_mins == 0 {
             self.switching_cost_mins = 23;
         }
+        if self.streak_goal_mins == 0 {
+            self.streak_goal_mins = 90;
+        }
         self
+    }
+
+    pub fn from_preset(preset: &crate::presets::Preset) -> Self {
+        let pc = &preset.config;
+        Self {
+            poll_interval_secs: pc.poll_interval_secs,
+            switching_cost_mins: pc.switching_cost_mins,
+            categories: CategoryRules {
+                code: pc.categories.code.clone(),
+                distraction: pc.categories.distraction.clone(),
+                communication: pc.categories.communication.clone(),
+                research: pc.categories.research.clone(),
+                system: pc.categories.system.clone(),
+            },
+            focus_block: pc.focus_block.clone(),
+            streak_goal_mins: pc.streak_goal_mins,
+        }
     }
 }
 
