@@ -4,11 +4,13 @@ use clap::{Parser, Subcommand};
 mod classifier;
 mod config;
 mod focus;
+mod init;
 mod report;
 mod store;
 mod switch;
 mod tracker;
 mod tui;
+mod watch;
 
 #[derive(Parser)]
 #[command(
@@ -29,6 +31,9 @@ enum Commands {
         /// Polling interval in seconds (default: 2)
         #[arg(short, long, default_value = "2")]
         interval: u64,
+        /// Enable desktop alerts on distraction (rate limited: 1 per 5 min)
+        #[arg(short, long)]
+        alert: bool,
     },
     /// Open the TUI dashboard
     Show,
@@ -38,6 +43,8 @@ enum Commands {
         #[arg(short, long)]
         date: Option<String>,
     },
+    /// Generate a weekly report (last 7 days)
+    Week,
     /// Start focus mode for N minutes
     Focus {
         /// Duration in minutes
@@ -54,6 +61,10 @@ enum Commands {
     },
     /// Show current status
     Status,
+    /// Initialize drift config
+    Init,
+    /// Live watch mode: show active window in real-time
+    Watch,
 }
 
 fn main() -> Result<()> {
@@ -61,30 +72,47 @@ fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    let config = config::Config::load()?;
-    let store = store::Store::open(&config.db_path())?;
-
     match cli.command {
-        Some(Commands::Track { interval }) => {
-            tracker::run_daemon(&store, &config, interval)?;
+        Some(Commands::Init) => {
+            init::init_config()?;
         }
-        Some(Commands::Show) => {
-            tui::run_dashboard(&store, &config)?;
+        Some(Commands::Watch) => {
+            let config = config::Config::load()?;
+            watch::run_watch(&config)?;
         }
-        Some(Commands::Report { date }) => {
-            report::daily_report(&store, &config, date.as_deref())?;
+        Some(Commands::Week) => {
+            let config = config::Config::load()?;
+            let store = store::Store::open(&config.db_path())?;
+            report::weekly_report(&store, &config)?;
         }
-        Some(Commands::Focus { minutes }) => {
-            focus::start_focus_mode(&store, &config, minutes)?;
-        }
-        Some(Commands::Export { format, date }) => {
-            report::export(&store, &config, &format, date.as_deref())?;
-        }
-        Some(Commands::Status) => {
-            print_status(&store)?;
-        }
-        None => {
-            tui::run_dashboard(&store, &config)?;
+        _ => {
+            let config = config::Config::load()?;
+            let store = store::Store::open(&config.db_path())?;
+
+            match cli.command {
+                Some(Commands::Track { interval, alert }) => {
+                    tracker::run_daemon(&store, &config, interval, alert)?;
+                }
+                Some(Commands::Show) => {
+                    tui::run_dashboard(&store, &config)?;
+                }
+                Some(Commands::Report { date }) => {
+                    report::daily_report(&store, &config, date.as_deref())?;
+                }
+                Some(Commands::Focus { minutes }) => {
+                    focus::start_focus_mode(&store, &config, minutes)?;
+                }
+                Some(Commands::Export { format, date }) => {
+                    report::export(&store, &config, &format, date.as_deref())?;
+                }
+                Some(Commands::Status) => {
+                    print_status(&store)?;
+                }
+                None => {
+                    tui::run_dashboard(&store, &config)?;
+                }
+                _ => unreachable!(),
+            }
         }
     }
 

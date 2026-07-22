@@ -217,3 +217,126 @@ fn format_duration(secs: u64) -> String {
         format!("{}s", secs)
     }
 }
+
+pub fn weekly_report(store: &Store, _config: &Config) -> Result<()> {
+    let today = Local::now().date_naive();
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
+
+    writeln!(out, "\n  drift, weekly report\n")?;
+    writeln!(out, "  ─────────────────────────────────────\n")?;
+
+    let mut week_scores: Vec<u64> = Vec::new();
+    let mut week_switches: u64 = 0;
+    let mut week_focus_loss: u64 = 0;
+    let mut week_tracked: u64 = 0;
+    let mut distraction_total: u64 = 0;
+
+    writeln!(out, "  Last 7 days:\n")?;
+    writeln!(
+        out,
+        "  {:<12}  {:<6}  {:<8}  {:<10}  {:<10}",
+        "Date", "Score", "Switches", "Focus Loss", "Tracked"
+    )?;
+    writeln!(out, "  {}", "─".repeat(54))?;
+
+    for i in (0..7).rev() {
+        let date = today - chrono::Duration::days(i as i64);
+        let summary = DailySummary::for_date(store, date)?;
+        week_scores.push(summary.focus_score);
+        week_switches += summary.switch_count;
+        week_focus_loss += summary.focus_loss;
+        week_tracked += summary.total_tracked;
+
+        for (cat, dur) in &summary.by_category {
+            if cat == "distraction" {
+                distraction_total += dur;
+            }
+        }
+
+        writeln!(
+            out,
+            "  {:<12}  {:<6}  {:<8}  {:<10}  {:<10}",
+            date.format("%a %b %d").to_string(),
+            summary.focus_score,
+            summary.switch_count,
+            format_duration(summary.focus_loss),
+            format_duration(summary.total_tracked)
+        )?;
+    }
+
+    let avg_score = if !week_scores.is_empty() {
+        week_scores.iter().sum::<u64>() / week_scores.len() as u64
+    } else {
+        0
+    };
+
+    let mut prev_scores: Vec<u64> = Vec::new();
+    for i in (7..14).rev() {
+        let date = today - chrono::Duration::days(i as i64);
+        let summary = DailySummary::for_date(store, date)?;
+        prev_scores.push(summary.focus_score);
+    }
+    let prev_avg = if !prev_scores.is_empty() {
+        prev_scores.iter().sum::<u64>() / prev_scores.len() as u64
+    } else {
+        0
+    };
+
+    let trend = if avg_score > prev_avg {
+        "↑ better"
+    } else if avg_score < prev_avg {
+        "↓ worse"
+    } else {
+        "→ same"
+    };
+
+    writeln!(out, "\n  Weekly summary:\n")?;
+    writeln!(out, "    Avg focus score:  {}/100  ({})", avg_score, trend)?;
+    writeln!(out, "    Total switches:   {}", week_switches)?;
+    writeln!(
+        out,
+        "    Total focus loss:  {}",
+        format_duration(week_focus_loss)
+    )?;
+    writeln!(
+        out,
+        "    Total tracked:     {}",
+        format_duration(week_tracked)
+    )?;
+    writeln!(
+        out,
+        "    Distraction time:  {}",
+        format_duration(distraction_total)
+    )?;
+
+    writeln!(out, "\n  Top distractions this week:\n")?;
+    let mut distraction_apps: std::collections::HashMap<String, u64> =
+        std::collections::HashMap::new();
+    for i in (0..7).rev() {
+        let date = today - chrono::Duration::days(i as i64);
+        let activities = store.activities_for_date(date)?;
+        for a in &activities {
+            if a.category == "distraction" {
+                *distraction_apps.entry(a.app_name.clone()).or_insert(0) += a.duration_secs;
+            }
+        }
+    }
+    let mut top_distractions: Vec<(String, u64)> = distraction_apps.into_iter().collect();
+    top_distractions.sort_by_key(|b| std::cmp::Reverse(b.1));
+    top_distractions.truncate(5);
+    for (app, dur) in &top_distractions {
+        writeln!(out, "    {:<20} {}", app, format_duration(*dur))?;
+    }
+
+    let streaks = store.streak_history(7)?;
+    let best_streak = streaks.iter().map(|(_, s)| *s).max().unwrap_or(0);
+    writeln!(
+        out,
+        "\n  Best focus streak: {}\n",
+        format_duration(best_streak)
+    )?;
+
+    writeln!(out)?;
+    Ok(())
+}

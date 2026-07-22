@@ -15,99 +15,90 @@ Research shows it takes **~23 minutes** to refocus after a context switch. Yet d
 ## Features
 
 - **Background tracking**: Monitors your active window/app every 2 seconds
-- **Smart classification**: Auto-categorizes apps as code, distraction, communication, research, or system
-- **Context switch detection**: Identifies category switches and calculates focus loss
-- **TUI dashboard**: Beautiful terminal UI with focus score, timeline, and stats
-- **Focus mode**: Block distractions for a set time period
-- **Daily reports**: Text summaries of your day
-- **Data export**: JSON or CSV for custom analysis
-- **100% local**: No cloud, no telemetry, no accounts. Your data stays on your machine.
+- **Context switch detection**: Classifies apps into categories (code, distraction, communication, research, system)
+- **Focus score**: 0-100 score based on switch count, distraction time, and focus loss
+- **TUI dashboard**: Real-time terminal UI with category breakdowns and switch history
+- **Daily reports**: Detailed breakdown of your day with insights
+- **Weekly reports**: 7-day summary with trend analysis and top distractions
+- **Focus mode**: Start a timed focus session and track interruptions
+- **Live watch mode**: See your active window and focus streak in real-time
+- **Streak tracking**: Longest consecutive focus streak per day
+- **Alerts**: Desktop notifications when you get distracted (rate-limited)
+- **Export**: JSON or CSV export of your data
+- **Cross-platform**: Linux (X11), macOS, and Windows
 
-## Install
+## Installation
+
+### From crates.io
 
 ```bash
 cargo install drift
 ```
 
-Or build from source:
+### From source
 
 ```bash
 git clone https://github.com/christiankbr/drift.git
 cd drift
-cargo install --path .
+cargo build --release
+# Binary is at target/release/drift
 ```
 
 ## Usage
 
 ```bash
-# Start the background tracker
+# Initialize config (creates ~/.config/drift/config.toml)
+drift init
+
+# Start background tracker (runs until Ctrl+C)
 drift track
 
-# Open the TUI dashboard
+# Start tracker with desktop alerts on distraction
+drift track --alert
+
+# Live watch mode (shows active window in real-time)
+drift watch
+
+# Open TUI dashboard
 drift show
 
-# Generate a daily report
+# Show current status
+drift status
+
+# Daily report
 drift report
+
+# Weekly report (last 7 days with trend)
+drift week
 
 # Start focus mode for 90 minutes
 drift focus 90
 
 # Export today's data as JSON
-drift export --format json
+drift export --format=json
 
-# Check current status
-drift status
+# Export specific date as CSV
+drift export --format=csv --date=2026-07-22
 ```
 
 ## Configuration
 
-drift creates a config file at `~/.config/drift/config.toml` on first run:
+drift creates a config at `~/.config/drift/config.toml`:
 
 ```toml
 poll_interval_secs = 2
 switching_cost_mins = 23
 
 [categories]
-code = ["vscode", "neovim", "vim", "cargo", "terminal"]
+code = ["code", "vim", "neovim", "idea", "terminal"]
 distraction = ["twitter", "reddit", "youtube", "discord"]
 communication = ["slack", "teams", "zoom"]
-research = ["firefox", "chrome", "safari"]
-system = ["finder", "nautilus", "settings"]
-
-focus_block = ["twitter", "reddit"]
+research = ["firefox", "chrome"]
+system = ["finder", "settings"]
 ```
 
-## How it works
-
-1. **Tracking**: drift polls your active window every 2 seconds using platform-native APIs (X11/Wayland on Linux, NSWorkspace on macOS, Win32 on Windows)
-2. **Classification**: Each app is categorized based on your config rules
-3. **Switch detection**: When the category changes, drift records a context switch and calculates the focus cost
-4. **Scoring**: Your daily focus score (0-100) is calculated from distraction ratio, focus loss, and switch frequency
-
-## Privacy
-
-drift is **100% local**. No data ever leaves your machine. No accounts, no telemetry, no cloud sync. Your activity data is stored in a local SQLite database at `~/.local/share/drift/drift.db`.
-
-## Platform Support
-
-| Platform | Status | Method |
-|----------|--------|--------|
-| Linux (X11) | ✅ | xdotool / xprop |
-| Linux (Wayland) | 🔄 | wlr-foreign-toplevel |
-| macOS | ✅ | AppleScript / NSWorkspace |
-| Windows | ✅ | PowerShell / Win32 |
-
-## Contributing
-
-Contributions welcome! See [issues](https://github.com/christiankbr/drift/issues) for ideas.
-
-```bash
-git clone https://github.com/christiankbr/drift.git
-cd drift
-cargo build
-cargo test
-```
+Data is stored in SQLite at `~/.local/share/drift/drift.db`.
 
 ## License
 
-MIT © Christian Kbr
+MIT

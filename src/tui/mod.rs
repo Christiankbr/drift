@@ -32,9 +32,11 @@ pub fn run_dashboard(store: &Store, config: &Config) -> Result<()> {
 
         if event::poll(std::time::Duration::from_millis(1000))?
             && let Event::Key(key) = event::read()?
-                && key.kind == KeyEventKind::Press && key.code == KeyCode::Char('q') {
-                    break;
-                }
+            && key.kind == KeyEventKind::Press
+            && key.code == KeyCode::Char('q')
+        {
+            break;
+        }
     }
 
     disable_raw_mode()?;

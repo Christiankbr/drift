@@ -41,7 +41,7 @@ pub fn create_tracker() -> Result<Box<dyn WindowTracker>> {
     anyhow::bail!("Unsupported platform")
 }
 
-pub fn run_daemon(store: &Store, config: &Config, interval_secs: u64) -> Result<()> {
+pub fn run_daemon(store: &Store, config: &Config, interval_secs: u64, alert: bool) -> Result<()> {
     let tracker = create_tracker()?;
     let interval = Duration::from_secs(interval_secs);
 
@@ -52,8 +52,12 @@ pub fn run_daemon(store: &Store, config: &Config, interval_secs: u64) -> Result<
     let mut current_title = String::new();
     let mut current_category = Category::Other;
     let mut first_iteration = true;
+    let mut last_alert_time: Option<chrono::NaiveDateTime> = None;
 
     tracing::info!("drift tracker started, polling every {}s", interval_secs);
+    if alert {
+        println!("  drift tracker running with alerts enabled\n");
+    }
 
     loop {
         thread::sleep(interval);
@@ -81,41 +85,84 @@ pub fn run_daemon(store: &Store, config: &Config, interval_secs: u64) -> Result<
 
         // Category changed = context switch
         if let Some(prev_cat) = last_category
-            && prev_cat != category {
-                // Record the previous activity segment
-                let duration = (now - current_start).num_seconds().max(0) as u64;
-                store.insert_activity(
-                    current_start,
-                    &current_app,
-                    &current_title,
-                    current_category,
-                    duration,
-                )?;
+            && prev_cat != category
+        {
+            // Record the previous activity segment
+            let duration = (now - current_start).num_seconds().max(0) as u64;
+            store.insert_activity(
+                current_start,
+                &current_app,
+                &current_title,
+                current_category,
+                duration,
+            )?;
 
-                // Record the context switch
-                let cost_mins = if prev_cat.is_focus_breaking() || category.is_focus_breaking() {
-                    config.switching_cost_mins
-                } else {
-                    // Switches within same focus area are cheaper
-                    config.switching_cost_mins / 3
-                };
-                store.insert_switch(now, prev_cat, category, cost_mins)?;
+            // Record the context switch
+            let cost_mins = if prev_cat.is_focus_breaking() || category.is_focus_breaking() {
+                config.switching_cost_mins
+            } else {
+                // Switches within same focus area are cheaper
+                config.switching_cost_mins / 3
+            };
+            store.insert_switch(now, prev_cat, category, cost_mins)?;
 
-                tracing::debug!(
-                    "Switch: {} -> {} (cost: {}min)",
-                    prev_cat,
-                    category,
-                    cost_mins
-                );
+            tracing::debug!(
+                "Switch: {} -> {} (cost: {}min)",
+                prev_cat,
+                category,
+                cost_mins
+            );
 
-                // Start new segment
-                current_start = now;
-                current_app = window.app_name.clone();
-                current_title = window.window_title.clone();
-                current_category = category;
+            // Start new segment
+            current_start = now;
+            current_app = window.app_name.clone();
+            current_title = window.window_title.clone();
+            current_category = category;
+
+            // Alert on distraction (rate limited: 1 per 5 min)
+            if alert && category == Category::Distraction {
+                let should_alert = last_alert_time.is_none_or(|t| (now - t).num_seconds() >= 300);
+                if should_alert {
+                    last_alert_time = Some(now);
+                    send_alert(&window.app_name);
+                }
             }
+        }
 
         last_category = Some(category);
         _last_app = Some(window.app_name);
+    }
+}
+
+fn send_alert(app_name: &str) {
+    let msg = format!("Distraction detected: {}", app_name);
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("notify-send")
+            .args(["drift", &msg])
+            .spawn()
+            .ok();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let script = format!(
+            "display notification \"{}\" with title \"drift\"",
+            msg.replace('\"', "\\\"")
+        );
+        std::process::Command::new("osascript")
+            .args(["-e", &script])
+            .spawn()
+            .ok();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("msg")
+            .args([std::env::var("USERNAME").unwrap_or_default(), &msg])
+            .spawn()
+            .ok();
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        let _ = msg;
     }
 }

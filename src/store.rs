@@ -238,6 +238,63 @@ impl Store {
     }
 }
 
+impl Store {
+    /// Longest consecutive focus streak (code + research) for a given date.
+    /// Returns seconds.
+    pub fn longest_streak_for_date(&self, date: NaiveDate) -> Result<u64> {
+        let activities = self.activities_for_date(date)?;
+        let switches = self.switches_for_date(date)?;
+
+        if activities.is_empty() {
+            return Ok(0);
+        }
+
+        // Switch timestamps where focus was broken (to distraction/communication)
+        let break_times: Vec<NaiveDateTime> = switches
+            .iter()
+            .filter(|s| {
+                let to = Category::from_str(&s.to_category);
+                to.is_focus_breaking()
+            })
+            .map(|s| s.timestamp)
+            .collect();
+
+        let mut max_streak = 0u64;
+        let mut current_streak = 0u64;
+
+        for a in &activities {
+            let is_focus = a.category == "code" || a.category == "research";
+            let was_broken = break_times.iter().any(|t| *t <= a.timestamp);
+
+            if is_focus && !was_broken {
+                current_streak += a.duration_secs;
+                if current_streak > max_streak {
+                    max_streak = current_streak;
+                }
+            } else {
+                current_streak = 0;
+            }
+        }
+
+        Ok(max_streak)
+    }
+
+    /// Streak history for the last N days.
+    /// Returns Vec<(date, longest_streak_seconds)>.
+    pub fn streak_history(&self, days: u32) -> Result<Vec<(NaiveDate, u64)>> {
+        let today = chrono::Local::now().date_naive();
+        let mut result = Vec::new();
+
+        for i in (0..days).rev() {
+            let date = today - chrono::Duration::days(i as i64);
+            let streak = self.longest_streak_for_date(date)?;
+            result.push((date, streak));
+        }
+
+        Ok(result)
+    }
+}
+
 impl DailySummary {
     pub fn for_date(store: &Store, date: NaiveDate) -> Result<Self> {
         let activities = store.activities_for_date(date)?;

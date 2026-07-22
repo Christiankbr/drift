@@ -40,26 +40,27 @@ pub fn start_focus_mode(store: &Store, config: &Config, minutes: u32) -> Result<
         let category = config.classify(&window.app_name);
 
         if let Some(prev) = &last_category
-            && *prev != category {
-                switch_count += 1;
-                let cost = crate::switch::switch_cost(*prev, category, config.switching_cost_mins);
+            && *prev != category
+        {
+            switch_count += 1;
+            let cost = crate::switch::switch_cost(*prev, category, config.switching_cost_mins);
 
-                store.insert_switch(now.naive_local(), *prev, category, cost)?;
+            store.insert_switch(now.naive_local(), *prev, category, cost)?;
 
-                let warning = if category.is_focus_breaking() {
-                    format!("  [!] DISTRACTION: {} ({})", window.app_name, category)
-                } else {
-                    format!("  [~] switch: {} -> {}", prev, category)
-                };
+            let warning = if category.is_focus_breaking() {
+                format!("  [!] DISTRACTION: {} ({})", window.app_name, category)
+            } else {
+                format!("  [~] switch: {} -> {}", prev, category)
+            };
 
-                println!("  {} {}", now.format("%H:%M:%S"), warning);
+            println!("  {} {}", now.format("%H:%M:%S"), warning);
 
-                // Check if focus is broken by a distraction
-                if category == crate::config::Category::Distraction {
-                    println!("  [!] Focus broken by distraction!");
-                    interrupted = true;
-                }
+            // Check if focus is broken by a distraction
+            if category == crate::config::Category::Distraction {
+                println!("  [!] Focus broken by distraction!");
+                interrupted = true;
             }
+        }
 
         last_category = Some(category);
     }
