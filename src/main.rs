@@ -2,9 +2,12 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 mod classifier;
+mod compare;
+mod completions;
 mod config;
 mod focus;
 mod init;
+mod insights;
 mod presets;
 mod report;
 mod store;
@@ -79,6 +82,25 @@ enum Commands {
         #[arg(short, long, default_value = "7")]
         days: u32,
     },
+    /// Generate shell completion scripts
+    Completions {
+        /// Shell: bash, zsh, fish, or powershell
+        shell: String,
+    },
+    /// Show insights from your tracking data (last 7 days)
+    Insights,
+    /// Compare two days or two weeks
+    Compare {
+        /// First date for comparison (YYYY-MM-DD)
+        #[arg(long = "date1")]
+        date1: Option<String>,
+        /// Second date for comparison (YYYY-MM-DD)
+        #[arg(long = "date2")]
+        date2: Option<String>,
+        /// Compare this week vs last week
+        #[arg(long)]
+        week: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -114,6 +136,30 @@ fn main() -> Result<()> {
             let config = config::Config::load()?;
             let store = store::Store::open(&config.db_path())?;
             report::weekly_report(&store, &config)?;
+        }
+        Some(Commands::Completions { shell }) => {
+            let shell = match shell.to_lowercase().as_str() {
+                "bash" => clap_complete::Shell::Bash,
+                "zsh" => clap_complete::Shell::Zsh,
+                "fish" => clap_complete::Shell::Fish,
+                "powershell" | "pwsh" => clap_complete::Shell::PowerShell,
+                _ => {
+                    eprintln!("  [!] Unknown shell: {}", shell);
+                    eprintln!("      Supported: bash, zsh, fish, powershell");
+                    std::process::exit(1);
+                }
+            };
+            completions::generate(shell)?;
+        }
+        Some(Commands::Insights) => {
+            let config = config::Config::load()?;
+            let store = store::Store::open(&config.db_path())?;
+            insights::insights(&store, &config)?;
+        }
+        Some(Commands::Compare { date1, date2, week }) => {
+            let config = config::Config::load()?;
+            let store = store::Store::open(&config.db_path())?;
+            compare::compare(&store, &config, date1.as_deref(), date2.as_deref(), week)?;
         }
         _ => {
             let config = config::Config::load()?;

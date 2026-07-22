@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>drift — Quantify your focus loss</title>
+    <meta name="description" content="Developer-focused context switch tracker. Quantify your focus loss. Terminal-native, cross-platform, open source.">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0d1117;
+            --bg-card: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --text-bright: #f0f6fc;
+            --text-dim: #8b949e;
+            --accent: #58a6ff;
+            --accent-dim: #1f6feb;
+            --green: #3fb950;
+            --red: #f85149;
+            --yellow: #d29922;
+            --purple: #bc8cff;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .container { max-width: 920px; margin: 0 auto; padding: 0 24px; }
+
+        /* Nav */
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+        }
+        nav .logo { font-size: 1.2rem; font-weight: 700; color: var(--text-bright); }
+        nav .logo span { color: var(--accent); }
+        nav .links a { margin-left: 24px; color: var(--text-dim); font-size: 0.9rem; }
+        nav .links a:hover { color: var(--text-bright); text-decoration: none; }
+
+        /* Hero */
+        .hero { text-align: center; padding: 80px 0 60px; }
+        .hero h1 {
+            font-size: 2.8rem;
+            font-weight: 800;
+            color: var(--text-bright);
+            letter-spacing: -0.03em;
+            margin-bottom: 16px;
+        }
+        .hero h1 .accent { color: var(--accent); }
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-dim);
+            max-width: 580px;
+            margin: 0 auto 40px;
+        }
+
+        .install-box {
+            display: inline-block;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px 28px;
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 0.95rem;
+            color: var(--text-bright);
+            cursor: pointer;
+            transition: border-color 0.2s;
+            user-select: all;
+        }
+        .install-box:hover { border-color: var(--accent); }
+        .install-box .prompt { color: var(--green); margin-right: 8px; }
+        .install-box .cmd { color: var(--text-bright); }
+
+        .badges {
+            margin-top: 32px;
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .badges img { height: 24px; }
+
+        /* Section */
+        section { padding: 60px 0; }
+        section h2 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--text-bright);
+            text-align: center;
+            margin-bottom: 48px;
+            letter-spacing: -0.02em;
+        }
+
+        /* Features */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 20px;
+        }
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 28px;
+            transition: border-color 0.2s;
+        }
+        .feature-card:hover { border-color: var(--accent-dim); }
+        .feature-card .icon { margin-bottom: 16px; }
+        .feature-card h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-bright);
+            margin-bottom: 8px;
+        }
+        .feature-card p { color: var(--text-dim); font-size: 0.92rem; }
+
+        /* Usage */
+        .usage-block {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 28px;
+            margin-bottom: 20px;
+        }
+        .usage-block h3 {
+            font-size: 1.05rem;
+            color: var(--text-bright);
+            margin-bottom: 16px;
+        }
+        .usage-block pre {
+            background: #010409;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 16px;
+            overflow-x: auto;
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 0.88rem;
+            line-height: 1.7;
+        }
+        .usage-block pre .comment { color: var(--text-dim); }
+        .usage-block pre .prompt { color: var(--green); }
+        .usage-block pre .cmd { color: var(--accent); }
+        .usage-block pre .flag { color: var(--yellow); }
+        .usage-block pre .str { color: var(--purple); }
+
+        /* Why section */
+        .why-section { text-align: center; }
+        .why-section .stat {
+            font-size: 3.5rem;
+            font-weight: 800;
+            color: var(--accent);
+            letter-spacing: -0.03em;
+        }
+        .why-section .stat-label {
+            font-size: 1.15rem;
+            color: var(--text-dim);
+            max-width: 540px;
+            margin: 12px auto 0;
+        }
+        .why-section .stat-source {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-top: 12px;
+        }
+
+        /* Presets */
+        .presets-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+        }
+        .preset-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 24px;
+            text-align: left;
+        }
+        .preset-card .name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-bright);
+            margin-bottom: 6px;
+        }
+        .preset-card .name .icon { color: var(--accent); margin-right: 6px; }
+        .preset-card .desc { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 12px; }
+        .preset-card .stats { font-size: 0.82rem; color: var(--text-dim); font-family: monospace; }
+        .preset-card .stats span { color: var(--text-bright); }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 40px 0;
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+        footer a { color: var(--text-dim); }
+        footer a:hover { color: var(--text-bright); }
+
+        @media (max-width: 640px) {
+            .hero h1 { font-size: 2rem; }
+            .hero p { font-size: 1.05rem; }
+            .why-section .stat { font-size: 2.5rem; }
+            nav .links a { margin-left: 14px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Nav -->
+        <nav>
+            <div class="logo">⌁ <span>drift</span></div>
+            <div class="links">
+                <a href="#features">Features</a>
+                <a href="#usage">Usage</a>
+                <a href="#why">Why</a>
+                <a href="https://github.com/christiankbr/drift">GitHub</a>
+                <a href="https://crates.io/crates/drift-tracker">crates.io</a>
+            </div>
+        </nav>
+
+        <!-- Hero -->
+        <div class="hero">
+            <h1><span class="accent">drift</span> — Quantify your focus loss</h1>
+            <p>A terminal-native tool that tracks your active window, detects context switches, and shows exactly how much your attention is drifting.</p>
+            <div class="install-box" onclick="navigator.clipboard.writeText('cargo install drift-tracker')">
+                <span class="prompt">$</span><span class="cmd">cargo install drift-tracker</span>
+            </div>
+            <div class="badges">
+                <img src="https://img.shields.io/crates/v/drift-tracker.svg" alt="crates.io version">
+                <img src="https://img.shields.io/crates/d/drift-tracker.svg" alt="crates.io downloads">
+                <img src="https://img.shields.io/github/stars/christiankbr/drift.svg" alt="GitHub stars">
+                <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license">
+            </div>
+        </div>
+
+        <!-- Why -->
+        <section id="why" class="why-section">
+            <h2>Why?</h2>
+            <div class="stat">23 minutes</div>
+            <p class="stat-label">That's how long it takes to refocus after a context switch. Yet developers switch between code, Slack, Twitter, and email hundreds of times per day.</p>
+            <p class="stat-source">Source: Gloria Mark, UC Irvine — "The Cost of Interrupted Work" (2008)</p>
+        </section>
+
+        <!-- Features -->
+        <section id="features">
+            <h2>Features</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#58a6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    </div>
+                    <h3>Background Tracking</h3>
+                    <p>Monitors your active window every 2 seconds. Categorizes apps into code, distraction, communication, research, and system.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f85149" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                    </div>
+                    <h3>Focus Score</h3>
+                    <p>0–100 score based on switch count, distraction time, and focus loss. Know exactly how your day went.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3fb950" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/></svg>
+                    </div>
+                    <h3>TUI Dashboard</h3>
+                    <p>Real-time terminal UI with category breakdowns, switch history, and live focus streaks.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#d29922" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </div>
+                    <h3>Focus Mode</h3>
+                    <p>Start timed focus sessions. Track interruptions and measure how long you actually stay in the zone.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#bc8cff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/></svg>
+                    </div>
+                    <h3>Insights & Compare</h3>
+                    <p>Discover your best focus hours, most distracting apps, and compare days or weeks side-by-side.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#58a6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="7.5 4.21 12 6.81 16.5 4.21"/><polyline points="7.5 19.79 7.5 8.21 12 5.61"/><polyline points="16.5 19.79 16.5 8.21 12 5.61"/></svg>
+                    </div>
+                    <h3>Shell Completions</h3>
+                    <p>Generate completions for bash, zsh, fish, and PowerShell. Tab-complete every command and flag.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3fb950" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    </div>
+                    <h3>Export & Reports</h3>
+                    <p>Daily and weekly reports with trend analysis. Export to JSON or CSV for your own pipelines.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f85149" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                    </div>
+                    <h3>Cross-Platform</h3>
+                    <p>Works on Linux (X11), macOS, and Windows. No cloud, no accounts — your data stays local.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Usage -->
+        <section id="usage">
+            <h2>Usage</h2>
+
+            <div class="usage-block">
+                <h3>Getting started</h3>
+<pre><span class="comment"># Install</span>
+<span class="prompt">$</span> <span class="cmd">cargo install drift-tracker</span>
+
+<span class="comment"># Initialize config</span>
+<span class="prompt">$</span> <span class="cmd">drift</span> init
+
+<span class="comment"># Apply a preset</span>
+<span class="prompt">$</span> <span class="cmd">drift</span> preset development
+
+<span class="comment"># Start tracking in the background</span>
+<span class="prompt">$</span> <span class="cmd">drift</span> track</pre>
+            </div>
+
+            <div class="usage-block">
+                <h3>Reports & Insights</h3>
+<pre><span class="comment"># Daily report</span>
+<span class="prompt">$</span> <span class="cmd">drift</span> report
+
+<span class="comment"># Weekly report with trend</span>
+<span class="prompt">$</span> <span class="cmd">drift</span> week
+
+<span class="comment"># Smart insights from last 7 days</span>
+<span class="prompt">$</span> <span class="cmd">drift</span> insights
+
+<span class="comment"># Compare two days</span>
+<span class="prompt">$</span> <span class="cmd">drift</span> compare <span class="flag">--date1</span>=<span class="str">2026-07-20</span> <span class="flag">--date2</span>=<span class="str">2026-07-22</span>
+
+<span class="comment"># Compare this week vs last week</span>
+<span class="prompt">$</span> <span class="cmd">drift</span> compare <span class="flag">--week</span></pre>
+            </div>
+
+            <div class="usage-block">
+                <h3>Focus & Dashboard</h3>
+<pre><span class="comment"># Start a 90-minute focus session</span>
+<span class="prompt">$</span> <span class="cmd">drift</span> focus 90
+
+<span class="comment"># Open the TUI dashboard</span>
+<span class="prompt">$</span> <span class="cmd">drift</span> show
+
+<span class="comment"># Live watch mode</span>
+<span class="prompt">$</span> <span class="cmd">drift</span> watch
+
+<span class="comment"># Export data as JSON</span>
+<span class="prompt">$</span> <span class="cmd">drift</span> export <span class="flag">--format</span>=<span class="str">json</span></pre>
+            </div>
+
+            <div class="usage-block">
+                <h3>Shell Completions</h3>
+<pre><span class="comment"># Bash</span>
+<span class="prompt">$</span> <span class="cmd">drift</span> completions bash <span class="flag">>></span> ~/.bashrc
+
+<span class="comment"># Zsh</span>
+<span class="prompt">$</span> <span class="cmd">drift</span> completions zsh <span class="flag">></span> ~/.zfunc/_drift
+
+<span class="comment"># Fish</span>
+<span class="prompt">$</span> <span class="cmd">drift</span> completions fish <span class="flag">></span> ~/.config/fish/completions/drift.fish
+
+<span class="comment"># PowerShell</span>
+<span class="prompt">$</span> <span class="cmd">drift</span> completions powershell <span class="flag">|</span> Out-String <span class="flag">|</span> Invoke-Expression</pre>
+            </div>
+        </section>
+
+        <!-- Presets -->
+        <section id="presets">
+            <h2>Presets</h2>
+            <div class="presets-grid">
+                <div class="preset-card">
+                    <div class="name"><span class="icon">⌨️</span> development</div>
+                    <div class="desc">Software developer focused on deep work. Strict distraction blocking.</div>
+                    <div class="stats">
+                        poll: <span>2s</span> · switch cost: <span>23min</span> · streak goal: <span>90min</span>
+                    </div>
+                </div>
+                <div class="preset-card">
+                    <div class="name"><span class="icon">✍️</span> writing</div>
+                    <div class="desc">Writer/researcher. Browsers are research, not distraction.</div>
+                    <div class="stats">
+                        poll: <span>3s</span> · switch cost: <span>15min</span> · streak goal: <span>60min</span>
+                    </div>
+                </div>
+                <div class="preset-card">
+                    <div class="name"><span class="icon">📚</span> research</div>
+                    <div class="desc">Researcher/academic. Lenient on browser switching.</div>
+                    <div class="stats">
+                        poll: <span>5s</span> · switch cost: <span>10min</span> · streak goal: <span>45min</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer>
+            <p><a href="https://github.com/christiankbr/drift">GitHub</a> · <a href="https://crates.io/crates/drift-tracker">crates.io</a> · MIT License</p>
+            <p style="margin-top:8px;">Built by developers who keep opening Discord instead of writing code.</p>
+        </footer>
+    </div>
+</body>
+</html>

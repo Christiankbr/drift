@@ -5,8 +5,11 @@
 [![CI](https://github.com/christiankbr/drift/actions/workflows/ci.yml/badge.svg)](https://github.com/christiankbr/drift/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Crates.io](https://img.shields.io/crates/v/drift-tracker.svg)](https://crates.io/crates/drift-tracker)
+[![Crates.io Downloads](https://img.shields.io/crates/d/drift-tracker.svg)](https://crates.io/crates/drift-tracker)
 
 **drift** is a terminal-native productivity tool that tracks your active window, detects context switches, and tells you exactly how much your attention is drifting.
+
+🌐 **Landing page:** <https://christiankbr.github.io/drift>
 
 ## Why?
 
@@ -20,10 +23,13 @@ Research shows it takes **~23 minutes** to refocus after a context switch. Yet d
 - **TUI dashboard**: Real-time terminal UI with category breakdowns and switch history
 - **Daily reports**: Detailed breakdown of your day with insights
 - **Weekly reports**: 7-day summary with trend analysis and top distractions
+- **Insights**: Smart analysis of your patterns — best focus time, top distractions, weekday productivity
+- **Compare**: Side-by-side comparison of two days or two weeks with delta metrics
 - **Focus mode**: Start a timed focus session and track interruptions
 - **Live watch mode**: See your active window and focus streak in real-time
 - **Streak tracking**: Longest consecutive focus streak per day with goals
 - **Config presets**: development, writing, research presets out of the box
+- **Shell completions**: bash, zsh, fish, and PowerShell support
 - **Alerts**: Desktop notifications when you get distracted (rate-limited)
 - **Export**: JSON or CSV export of your data
 - **Cross-platform**: Linux (X11), macOS, and Windows
@@ -43,6 +49,27 @@ git clone https://github.com/christiankbr/drift.git
 cd drift
 cargo build --release
 # Binary is at target/release/drift-tracker
+```
+
+### Shell Completions
+
+After installing, generate shell completions:
+
+```bash
+# Bash
+drift completions bash >> ~/.bashrc
+
+# Zsh
+drift completions zsh > ~/.zfunc/_drift
+# Make sure ~/.zfunc is in your fpath:
+#   fpath+=~/.zfunc
+#   autoload -Uz compinit && compinit
+
+# Fish
+drift completions fish > ~/.config/fish/completions/drift.fish
+
+# PowerShell
+drift completions powershell | Out-String | Invoke-Expression
 ```
 
 ## Usage
@@ -82,6 +109,15 @@ drift report
 # Weekly report with trend
 drift week
 
+# Smart insights from last 7 days
+drift insights
+
+# Compare two days
+drift compare --date1=2026-07-20 --date2=2026-07-22
+
+# Compare this week vs last week
+drift compare --week
+
 # Start focus mode for 90 minutes
 drift focus 90
 
@@ -90,6 +126,9 @@ drift export --format=json
 
 # Export specific date as CSV
 drift export --format=csv --date=2026-07-22
+
+# Generate shell completions
+drift completions bash
 ```
 
 ## Config Presets
