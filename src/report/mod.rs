@@ -18,13 +18,25 @@ pub fn daily_report(store: &Store, _config: &Config, date: Option<&str>) -> Resu
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
 
-    writeln!(out, "\n  drift, daily report for {}\n", date.format("%A, %B %d, %Y"))?;
+    writeln!(
+        out,
+        "\n  drift, daily report for {}\n",
+        date.format("%A, %B %d, %Y")
+    )?;
     writeln!(out, "  ─────────────────────────────────────\n")?;
 
     // Overview
-    writeln!(out, "  Tracked time:     {}", format_duration(summary.total_tracked))?;
+    writeln!(
+        out,
+        "  Tracked time:     {}",
+        format_duration(summary.total_tracked)
+    )?;
     writeln!(out, "  Context switches: {}", summary.switch_count)?;
-    writeln!(out, "  Focus loss:       {}", format_duration(summary.focus_loss))?;
+    writeln!(
+        out,
+        "  Focus loss:       {}",
+        format_duration(summary.focus_loss)
+    )?;
     writeln!(out, "  Focus score:      {}/100\n", summary.focus_score)?;
 
     // Category breakdown
@@ -81,9 +93,15 @@ pub fn daily_report(store: &Store, _config: &Config, date: Option<&str>) -> Resu
     if summary.focus_score >= 70 {
         writeln!(out, "    [+] Strong focus day. Keep it up.")?;
     } else if summary.focus_score >= 40 {
-        writeln!(out, "    [~] Mixed focus. More deep work blocks could help.")?;
+        writeln!(
+            out,
+            "    [~] Mixed focus. More deep work blocks could help."
+        )?;
     } else {
-        writeln!(out, "    [!] High distraction. Consider focus mode: drift focus 90")?;
+        writeln!(
+            out,
+            "    [!] High distraction. Consider focus mode: drift focus 90"
+        )?;
     }
 
     let distraction_time: u64 = summary
@@ -100,7 +118,11 @@ pub fn daily_report(store: &Store, _config: &Config, date: Option<&str>) -> Resu
     }
 
     if summary.switch_count > 30 {
-        writeln!(out, "    [!] {} switches is above average. Try batching communication.", summary.switch_count)?;
+        writeln!(
+            out,
+            "    [!] {} switches is above average. Try batching communication.",
+            summary.switch_count
+        )?;
     }
 
     writeln!(out)?;
@@ -126,8 +148,11 @@ pub fn export(store: &Store, _config: &Config, format: &str, date: Option<&str>)
             writeln!(out, "  \"date\": \"{}\",", date)?;
             writeln!(out, "  \"activities\": [")?;
             for (i, a) in activities.iter().enumerate() {
-                write!(out, "    {{\"timestamp\": \"{}\", \"app\": \"{}\", \"title\": \"{}\", \"category\": \"{}\", \"duration_secs\": {}}}",
-                    a.timestamp, a.app_name, a.window_title, a.category, a.duration_secs)?;
+                write!(
+                    out,
+                    "    {{\"timestamp\": \"{}\", \"app\": \"{}\", \"title\": \"{}\", \"category\": \"{}\", \"duration_secs\": {}}}",
+                    a.timestamp, a.app_name, a.window_title, a.category, a.duration_secs
+                )?;
                 if i < activities.len() - 1 {
                     writeln!(out, ",")?;
                 } else {
@@ -137,8 +162,11 @@ pub fn export(store: &Store, _config: &Config, format: &str, date: Option<&str>)
             writeln!(out, "  ],")?;
             writeln!(out, "  \"switches\": [")?;
             for (i, s) in switches.iter().enumerate() {
-                write!(out, "    {{\"timestamp\": \"{}\", \"from\": \"{}\", \"to\": \"{}\", \"cost_mins\": {}}}",
-                    s.timestamp, s.from_category, s.to_category, s.cost_mins)?;
+                write!(
+                    out,
+                    "    {{\"timestamp\": \"{}\", \"from\": \"{}\", \"to\": \"{}\", \"cost_mins\": {}}}",
+                    s.timestamp, s.from_category, s.to_category, s.cost_mins
+                )?;
                 if i < switches.len() - 1 {
                     writeln!(out, ",")?;
                 } else {
@@ -149,14 +177,25 @@ pub fn export(store: &Store, _config: &Config, format: &str, date: Option<&str>)
             writeln!(out, "}}")?;
         }
         "csv" => {
-            writeln!(out, "timestamp,app_name,window_title,category,duration_secs")?;
+            writeln!(
+                out,
+                "timestamp,app_name,window_title,category,duration_secs"
+            )?;
             for a in &activities {
-                writeln!(out, "{},{},{},{},{}", a.timestamp, a.app_name, a.window_title, a.category, a.duration_secs)?;
+                writeln!(
+                    out,
+                    "{},{},{},{},{}",
+                    a.timestamp, a.app_name, a.window_title, a.category, a.duration_secs
+                )?;
             }
             writeln!(out)?;
             writeln!(out, "timestamp,from_category,to_category,cost_mins")?;
             for s in &switches {
-                writeln!(out, "{},{},{},{}", s.timestamp, s.from_category, s.to_category, s.cost_mins)?;
+                writeln!(
+                    out,
+                    "{},{},{},{}",
+                    s.timestamp, s.from_category, s.to_category, s.cost_mins
+                )?;
             }
         }
         _ => {

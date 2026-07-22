@@ -44,8 +44,14 @@ impl WindowTracker for WindowsTracker {
         let result = String::from_utf8_lossy(&output.stdout);
         let parts: Vec<&str> = result.trim().splitn(2, '|').collect();
 
-        let app_name = parts.first().map(|s| s.to_string()).unwrap_or_else(|| "unknown".to_string());
-        let window_title = parts.get(1).map(|s| s.to_string()).unwrap_or_else(|| String::new());
+        let app_name = parts
+            .first()
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+        let window_title = parts
+            .get(1)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| String::new());
 
         Ok(ActiveWindow {
             app_name,

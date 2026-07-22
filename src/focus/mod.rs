@@ -39,17 +39,12 @@ pub fn start_focus_mode(store: &Store, config: &Config, minutes: u32) -> Result<
 
         let category = config.classify(&window.app_name);
 
-        if let Some(prev) = last_category {
-            if prev != category {
+        if let Some(prev) = &last_category
+            && *prev != category {
                 switch_count += 1;
-                let cost = crate::switch::switch_cost(prev, category, config.switching_cost_mins);
+                let cost = crate::switch::switch_cost(*prev, category, config.switching_cost_mins);
 
-                store.insert_switch(
-                    now.naive_local(),
-                    prev,
-                    category,
-                    cost,
-                )?;
+                store.insert_switch(now.naive_local(), *prev, category, cost)?;
 
                 let warning = if category.is_focus_breaking() {
                     format!("  [!] DISTRACTION: {} ({})", window.app_name, category)
@@ -65,7 +60,6 @@ pub fn start_focus_mode(store: &Store, config: &Config, minutes: u32) -> Result<
                     interrupted = true;
                 }
             }
-        }
 
         last_category = Some(category);
     }
@@ -76,14 +70,20 @@ pub fn start_focus_mode(store: &Store, config: &Config, minutes: u32) -> Result<
     println!("  Focus session complete.\n");
     println!("  Duration:      {} minutes", minutes);
     println!("  Switches:      {}", switch_count);
-    println!("  Interrupted:   {}", if interrupted { "yes" } else { "no" });
+    println!(
+        "  Interrupted:   {}",
+        if interrupted { "yes" } else { "no" }
+    );
 
     if switch_count == 0 {
         println!("\n  [+] Perfect focus. Zero context switches.");
     } else if switch_count <= 3 {
         println!("\n  [+] Good focus. Minimal switching.");
     } else {
-        println!("\n  [!] {} switches. Try removing distractions next time.", switch_count);
+        println!(
+            "\n  [!] {} switches. Try removing distractions next time.",
+            switch_count
+        );
     }
 
     println!();

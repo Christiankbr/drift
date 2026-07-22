@@ -44,7 +44,7 @@ pub fn create_tracker() -> Result<Box<dyn WindowTracker>> {
 pub fn run_daemon(store: &Store, config: &Config, interval_secs: u64) -> Result<()> {
     let tracker = create_tracker()?;
     let interval = Duration::from_secs(interval_secs);
-    
+
     let mut _last_app: Option<String> = None;
     let mut last_category: Option<Category> = None;
     let mut current_start = Local::now().naive_local();
@@ -80,8 +80,8 @@ pub fn run_daemon(store: &Store, config: &Config, interval_secs: u64) -> Result<
         }
 
         // Category changed = context switch
-        if let Some(prev_cat) = last_category {
-            if prev_cat != category {
+        if let Some(prev_cat) = last_category
+            && prev_cat != category {
                 // Record the previous activity segment
                 let duration = (now - current_start).num_seconds().max(0) as u64;
                 store.insert_activity(
@@ -114,7 +114,6 @@ pub fn run_daemon(store: &Store, config: &Config, interval_secs: u64) -> Result<
                 current_title = window.window_title.clone();
                 current_category = category;
             }
-        }
 
         last_category = Some(category);
         _last_app = Some(window.app_name);

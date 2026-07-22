@@ -8,6 +8,7 @@ pub struct LinuxTracker {
 }
 
 impl LinuxTracker {
+    #[allow(clippy::new_ret_no_self)]
     pub fn new() -> Result<Box<dyn WindowTracker>> {
         // Check if xdotool is available as fallback
         let has_xdotool = Command::new("which")
@@ -74,7 +75,7 @@ impl LinuxTracker {
         let window_id = stdout
             .split('#')
             .nth(1)
-            .and_then(|s| s.trim().split_whitespace().next())
+            .and_then(|s| s.split_whitespace().next())
             .ok_or_else(|| anyhow::anyhow!("Could not parse active window from xprop"))?;
 
         // Get window name
@@ -86,11 +87,7 @@ impl LinuxTracker {
         let window_title = name_stdout
             .split('=')
             .nth(1)
-            .map(|s| {
-                s.trim()
-                    .trim_matches('"')
-                    .to_string()
-            })
+            .map(|s| s.trim().trim_matches('"').to_string())
             .unwrap_or_else(|| "unknown".to_string());
 
         // Get WM_CLASS for app name

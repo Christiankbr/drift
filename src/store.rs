@@ -1,7 +1,7 @@
 use crate::config::Category;
-use rusqlite::{params, Connection};
 use anyhow::Result;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+use rusqlite::{Connection, params};
 use std::collections::HashMap;
 
 pub struct Store {
@@ -10,6 +10,7 @@ pub struct Store {
 
 #[derive(Debug, Clone)]
 pub struct ActivityEntry {
+    #[allow(dead_code)]
     pub id: i64,
     pub timestamp: NaiveDateTime,
     pub app_name: String,
@@ -20,6 +21,7 @@ pub struct ActivityEntry {
 
 #[derive(Debug, Clone)]
 pub struct SwitchEntry {
+    #[allow(dead_code)]
     pub id: i64,
     pub timestamp: NaiveDateTime,
     pub from_category: String,
@@ -148,7 +150,7 @@ impl Store {
             "SELECT id, timestamp, app_name, window_title, category, duration_secs
              FROM activities
              WHERE timestamp >= ?1 AND timestamp <= ?2
-             ORDER BY timestamp ASC"
+             ORDER BY timestamp ASC",
         )?;
         let rows = stmt.query_map(
             params![
@@ -159,7 +161,8 @@ impl Store {
                 let ts: String = row.get(1)?;
                 Ok(ActivityEntry {
                     id: row.get(0)?,
-                    timestamp: NaiveDateTime::parse_from_str(&ts, "%Y-%m-%d %H:%M:%S").unwrap_or(start),
+                    timestamp: NaiveDateTime::parse_from_str(&ts, "%Y-%m-%d %H:%M:%S")
+                        .unwrap_or(start),
                     app_name: row.get(2)?,
                     window_title: row.get(3)?,
                     category: row.get(4)?,
@@ -181,7 +184,7 @@ impl Store {
             "SELECT id, timestamp, from_category, to_category, cost_mins
              FROM switches
              WHERE timestamp >= ?1 AND timestamp <= ?2
-             ORDER BY timestamp ASC"
+             ORDER BY timestamp ASC",
         )?;
         let rows = stmt.query_map(
             params![
@@ -192,7 +195,8 @@ impl Store {
                 let ts: String = row.get(1)?;
                 Ok(SwitchEntry {
                     id: row.get(0)?,
-                    timestamp: NaiveDateTime::parse_from_str(&ts, "%Y-%m-%d %H:%M:%S").unwrap_or(start),
+                    timestamp: NaiveDateTime::parse_from_str(&ts, "%Y-%m-%d %H:%M:%S")
+                        .unwrap_or(start),
                     from_category: row.get(2)?,
                     to_category: row.get(3)?,
                     cost_mins: row.get(4)?,
@@ -206,12 +210,13 @@ impl Store {
         Ok(entries)
     }
 
+    #[allow(dead_code)]
     pub fn last_activity(&self) -> Result<Option<ActivityEntry>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, timestamp, app_name, window_title, category, duration_secs
              FROM activities
              ORDER BY timestamp DESC
-             LIMIT 1"
+             LIMIT 1",
         )?;
         let mut rows = stmt.query_map([], |row| {
             let ts: String = row.get(1)?;
@@ -254,7 +259,8 @@ impl DailySummary {
             let loss_ratio = (focus_loss as f64 / total_tracked as f64).min(1.0);
             let switch_penalty = (switch_count as f64 / 50.0).min(1.0); // 50+ switches = 0
 
-            let score = 100.0 * (1.0 - 0.4 * distraction_ratio - 0.3 * loss_ratio - 0.3 * switch_penalty);
+            let score =
+                100.0 * (1.0 - 0.4 * distraction_ratio - 0.3 * loss_ratio - 0.3 * switch_penalty);
             score.round() as u64
         } else {
             0
@@ -266,11 +272,11 @@ impl DailySummary {
             *cat_map.entry(a.category.clone()).or_insert(0) += a.duration_secs;
         }
         let mut by_category: Vec<(String, u64)> = cat_map.into_iter().collect();
-        by_category.sort_by(|a, b| b.1.cmp(&a.1));
+        by_category.sort_by_key(|b| std::cmp::Reverse(b.1));
 
         // Top switches (most costly)
         let mut top_switches = switches.clone();
-        top_switches.sort_by(|a, b| b.cost_mins.cmp(&a.cost_mins));
+        top_switches.sort_by_key(|b| std::cmp::Reverse(b.cost_mins));
         top_switches.truncate(10);
 
         Ok(Self {

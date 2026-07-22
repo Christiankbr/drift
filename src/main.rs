@@ -96,7 +96,10 @@ fn print_status(store: &store::Store) -> Result<()> {
     let summary = store::DailySummary::for_date(store, today)?;
 
     println!("drift, status for {}\n", today.format("%Y-%m-%d"));
-    println!("  Tracked time:   {}", format_duration(summary.total_tracked));
+    println!(
+        "  Tracked time:   {}",
+        format_duration(summary.total_tracked)
+    );
     println!("  Context switches: {}", summary.switch_count);
     println!("  Focus loss:     {}", format_duration(summary.focus_loss));
     println!("  Focus score:    {}/100", summary.focus_score);

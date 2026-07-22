@@ -111,30 +111,117 @@ impl Config {
 
     fn classify_default(name: &str) -> Category {
         let code_apps = [
-            "code", "vim", "neovim", "nvim", "emacs", "idea", "pycharm", "rustrover",
-            "goland", "webstorm", "sublime", "atom", "zed", "helix", "kak", "nano",
-            "vi", "terminal", "alacritty", "kitty", "wezterm", "gnome-terminal",
-            "konsole", "xterm", "tilix", "tmux", "screen", "tabby", "iterm",
-            "windsurf", "cursor", "fleet", "neovide", "cargo", "rust-analyzer",
-            "tsserver", "eslint", "docker", "kubectl", "ssh", "mosh",
+            "code",
+            "vim",
+            "neovim",
+            "nvim",
+            "emacs",
+            "idea",
+            "pycharm",
+            "rustrover",
+            "goland",
+            "webstorm",
+            "sublime",
+            "atom",
+            "zed",
+            "helix",
+            "kak",
+            "nano",
+            "vi",
+            "terminal",
+            "alacritty",
+            "kitty",
+            "wezterm",
+            "gnome-terminal",
+            "konsole",
+            "xterm",
+            "tilix",
+            "tmux",
+            "screen",
+            "tabby",
+            "iterm",
+            "windsurf",
+            "cursor",
+            "fleet",
+            "neovide",
+            "cargo",
+            "rust-analyzer",
+            "tsserver",
+            "eslint",
+            "docker",
+            "kubectl",
+            "ssh",
+            "mosh",
         ];
         let distraction_apps = [
-            "twitter", "x.com", "reddit", "youtube", "twitch", "netflix", "spotify",
-            "discord", "telegram", "whatsapp", "instagram", "tiktok", "facebook",
-            "snapchat", "steam", "games", "minecraft", "spotify",
+            "twitter",
+            "x.com",
+            "reddit",
+            "youtube",
+            "twitch",
+            "netflix",
+            "spotify",
+            "discord",
+            "telegram",
+            "whatsapp",
+            "instagram",
+            "tiktok",
+            "facebook",
+            "snapchat",
+            "steam",
+            "games",
+            "minecraft",
+            "spotify",
         ];
         let comm_apps = [
-            "slack", "teams", "zoom", "meet", "outlook", "thunderbird", "mail",
-            "signal", "skype", "webex", "gmail", "protonmail",
+            "slack",
+            "teams",
+            "zoom",
+            "meet",
+            "outlook",
+            "thunderbird",
+            "mail",
+            "signal",
+            "skype",
+            "webex",
+            "gmail",
+            "protonmail",
         ];
         let research_apps = [
-            "firefox", "chrome", "chromium", "brave", "safari", "edge", "arc",
-            "zen", "qutebrowser", "epiphany", "sphinx", "devdocs", "zed",
+            "firefox",
+            "chrome",
+            "chromium",
+            "brave",
+            "safari",
+            "edge",
+            "arc",
+            "zen",
+            "qutebrowser",
+            "epiphany",
+            "sphinx",
+            "devdocs",
+            "zed",
         ];
         let system_apps = [
-            "finder", "nautilus", "dolphin", "thunar", "ranger", "yazi", "nemo",
-            "explorer", "settings", "system", "activity monitor", "task manager",
-            "gnome-shell", "kwin", "i3", "sway", "rofi", "dmenu", "fuzzel",
+            "finder",
+            "nautilus",
+            "dolphin",
+            "thunar",
+            "ranger",
+            "yazi",
+            "nemo",
+            "explorer",
+            "settings",
+            "system",
+            "activity monitor",
+            "task manager",
+            "gnome-shell",
+            "kwin",
+            "i3",
+            "sway",
+            "rofi",
+            "dmenu",
+            "fuzzel",
         ];
 
         if code_apps.iter().any(|a| name.contains(a)) {
@@ -185,6 +272,7 @@ impl Category {
         }
     }
 
+    #[allow(dead_code)]
     pub fn color(&self) -> ratatui::style::Color {
         match self {
             Category::Code => ratatui::style::Color::Green,
@@ -197,12 +285,10 @@ impl Category {
     }
 
     pub fn is_focus_breaking(&self) -> bool {
-        matches!(
-            self,
-            Category::Distraction | Category::Communication
-        )
+        matches!(self, Category::Distraction | Category::Communication)
     }
 
+    #[allow(dead_code)]
     pub fn from_str(s: &str) -> Self {
         match s {
             "code" => Category::Code,
