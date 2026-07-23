@@ -24,18 +24,26 @@ pub fn run_dashboard(store: &Store, config: &Config) -> Result<()> {
     let backend = ratatui::backend::CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
+    let mut refresh = true;
+
     loop {
-        let today = Local::now().date_naive();
-        let summary = DailySummary::for_date(store, today)?;
+        if refresh {
+            terminal.draw(|f| draw_dashboard(f, store, config))?;
+            refresh = false;
+        }
 
-        terminal.draw(|f| draw_dashboard(f, &summary))?;
-
-        if event::poll(std::time::Duration::from_millis(1000))?
+        if event::poll(std::time::Duration::from_millis(2000))?
             && let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
-            && key.code == KeyCode::Char('q')
         {
-            break;
+            match key.code {
+                KeyCode::Char('q') | KeyCode::Esc => break,
+                KeyCode::Char('r') => refresh = true,
+                _ => {}
+            }
+        } else {
+            // Auto-refresh every 2s
+            refresh = true;
         }
     }
 
@@ -45,26 +53,55 @@ pub fn run_dashboard(store: &Store, config: &Config) -> Result<()> {
     Ok(())
 }
 
-fn draw_dashboard(f: &mut ratatui::Frame, summary: &DailySummary) {
+fn cat_color(cat: &str) -> Color {
+    match cat {
+        "code" => Color::Green,
+        "distraction" => Color::Red,
+        "communication" => Color::Yellow,
+        "research" => Color::Blue,
+        "system" => Color::DarkGray,
+        _ => Color::Gray,
+    }
+}
+
+fn draw_dashboard(f: &mut ratatui::Frame, store: &Store, _config: &Config) {
+    let today = Local::now().date_naive();
+    let summary = DailySummary::for_date(store, today).unwrap_or_else(|_| DailySummary {
+        date: today,
+        total_tracked: 0,
+        switch_count: 0,
+        focus_loss: 0,
+        focus_score: 0,
+        by_category: vec![],
+        top_switches: vec![],
+    });
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3), // Header
             Constraint::Length(5), // Focus score gauge
-            Constraint::Length(8), // Stats row
+            Constraint::Length(7), // Stats row
             Constraint::Min(10),   // Category breakdown + switches
             Constraint::Length(3), // Footer
         ])
         .split(f.area());
 
-    // Header
+    // Header with daemon status
+    let daemon_status = if crate::daemon::is_running() {
+        Span::styled(" ● running", Style::default().fg(Color::Green))
+    } else {
+        Span::styled(" ○ idle", Style::default().fg(Color::DarkGray))
+    };
     let header = Paragraph::new(vec![Line::from(vec![
         Span::styled(
-            " drift ",
+            " drift",
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         ),
+        Span::raw("  "),
+        daemon_status,
         Span::raw("  "),
         Span::styled(
             summary.date.format("%A, %B %d").to_string(),
@@ -90,7 +127,7 @@ fn draw_dashboard(f: &mut ratatui::Frame, summary: &DailySummary) {
         .label(format!("{} / 100", score));
     f.render_widget(gauge, chunks[1]);
 
-    // Stats row
+    // Stats row — 4 stat cards
     let stats_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -115,7 +152,7 @@ fn draw_dashboard(f: &mut ratatui::Frame, summary: &DailySummary) {
         ),
         (
             "Deep Work",
-            format_duration(longest_deep_work(summary)),
+            format_duration(longest_deep_work(&summary)),
             Color::Green,
         ),
     ];
@@ -127,22 +164,23 @@ fn draw_dashboard(f: &mut ratatui::Frame, summary: &DailySummary) {
                 value.clone(),
                 Style::default().fg(*color).add_modifier(Modifier::BOLD),
             )),
+            Line::from(""),
         ])
         .block(Block::default().borders(Borders::ALL));
         f.render_widget(stat, stats_chunks[i]);
     }
 
-    // Bottom section: category bars + top switches
+    // Bottom: category bars + top switches
     let bottom_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(chunks[3]);
 
-    // Category breakdown as bar chart
+    // Category bars with colors
     let mut bar_data: Vec<(&str, u64)> = summary
         .by_category
         .iter()
-        .map(|(c, d)| (c.as_str(), d / 60)) // convert to minutes
+        .map(|(c, d)| (c.as_str(), d / 60))
         .collect();
     bar_data.sort_by_key(|b| std::cmp::Reverse(b.1));
 
@@ -150,10 +188,10 @@ fn draw_dashboard(f: &mut ratatui::Frame, summary: &DailySummary) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("Time by Category (minutes)"),
+                .title("Time by Category (min)"),
         )
         .data(&bar_data)
-        .bar_width(8)
+        .bar_width(10)
         .bar_style(Style::default().fg(Color::Cyan))
         .value_style(
             Style::default()
@@ -162,17 +200,24 @@ fn draw_dashboard(f: &mut ratatui::Frame, summary: &DailySummary) {
         );
     f.render_widget(bar_chart, bottom_chunks[0]);
 
-    // Top switches list
+    // Top switches with category colors
     let switch_items: Vec<ListItem> = summary
         .top_switches
         .iter()
         .map(|s| {
             ListItem::new(vec![Line::from(vec![
                 Span::styled(
-                    format!(" {} -> {} ", s.from_category, s.to_category),
-                    Style::default().fg(Color::Yellow),
+                    format!(" {} → {} ", s.from_category, s.to_category),
+                    Style::default().fg(cat_color(&s.to_category)),
                 ),
-                Span::raw(format!(" {}min", s.cost_mins)),
+                Span::styled(
+                    format!("{}min", s.cost_mins),
+                    Style::default().fg(if s.cost_mins >= 20 {
+                        Color::Red
+                    } else {
+                        Color::DarkGray
+                    }),
+                ),
                 Span::styled(
                     format!("  {}", s.timestamp.format("%H:%M")),
                     Style::default().fg(Color::DarkGray),
@@ -182,15 +227,11 @@ fn draw_dashboard(f: &mut ratatui::Frame, summary: &DailySummary) {
         .collect();
 
     let switch_list = List::new(switch_items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Top Context Switches"),
-        )
+        .block(Block::default().borders(Borders::ALL).title("Top Switches"))
         .style(Style::default().fg(Color::White));
     f.render_widget(switch_list, bottom_chunks[1]);
 
-    // Footer
+    // Footer / help bar
     let footer = Paragraph::new(vec![Line::from(vec![
         Span::styled(
             " [q]",
@@ -206,14 +247,20 @@ fn draw_dashboard(f: &mut ratatui::Frame, summary: &DailySummary) {
                 .add_modifier(Modifier::BOLD),
         ),
         Span::raw(" refresh  "),
-        Span::styled(" drift v0.1.0 ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            " [Esc]",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" quit  "),
+        Span::styled(" drift v0.9.0 ", Style::default().fg(Color::DarkGray)),
     ])])
     .block(Block::default().borders(Borders::TOP));
     f.render_widget(footer, chunks[4]);
 }
 
 fn longest_deep_work(summary: &DailySummary) -> u64 {
-    // Approximate: code + research time
     summary
         .by_category
         .iter()
@@ -226,7 +273,7 @@ fn format_duration(secs: u64) -> String {
     let h = secs / 3600;
     let m = (secs % 3600) / 60;
     if h > 0 {
-        format!("{}h {}m", h, m)
+        format!("{}h{}m", h, m)
     } else if m > 0 {
         format!("{}m", m)
     } else {

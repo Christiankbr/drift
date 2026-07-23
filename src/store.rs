@@ -5,7 +5,7 @@ use rusqlite::{Connection, params};
 use std::collections::HashMap;
 
 pub struct Store {
-    conn: Connection,
+    pub conn: Connection,
 }
 
 #[derive(Debug, Clone)]
@@ -357,6 +357,82 @@ mod tests {
         let date = chrono::Local::now().date_naive();
         let streak = store.longest_streak_for_date(date).unwrap();
         assert_eq!(streak, 0);
+    }
+
+    #[test]
+    fn test_longest_streak_with_data() {
+        let (store, _tmp) = tmp_store();
+        let date = chrono::Local::now().date_naive();
+        let ts = date.and_hms_opt(9, 0, 0).unwrap();
+        store
+            .insert_activity(ts, "code", "main.rs", Category::Code, 3600)
+            .unwrap();
+        let ts2 = date.and_hms_opt(10, 0, 0).unwrap();
+        store
+            .insert_activity(ts2, "vim", "app.rs", Category::Code, 1800)
+            .unwrap();
+        let streak = store.longest_streak_for_date(date).unwrap();
+        assert!(streak >= 1800); // at least the last activity
+    }
+
+    #[test]
+    fn test_streak_history_multiple_days() {
+        let (store, _tmp) = tmp_store();
+        let today = chrono::Local::now().date_naive();
+        let yesterday = today - chrono::Duration::days(1);
+        let ts1 = today.and_hms_opt(10, 0, 0).unwrap();
+        store
+            .insert_activity(ts1, "code", "a.rs", Category::Code, 600)
+            .unwrap();
+        let ts2 = yesterday.and_hms_opt(14, 0, 0).unwrap();
+        store
+            .insert_activity(ts2, "code", "b.rs", Category::Code, 900)
+            .unwrap();
+        let streaks = store.streak_history(7).unwrap();
+        assert_eq!(streaks.len(), 7);
+        assert!(streaks[6].1 > 0); // today has data
+        assert!(streaks[5].1 > 0); // yesterday has data
+    }
+
+    #[test]
+    fn test_daily_summary_empty_day() {
+        let (store, _tmp) = tmp_store();
+        let date = chrono::Local::now().date_naive();
+        let summary = DailySummary::for_date(&store, date).unwrap();
+        assert_eq!(summary.total_tracked, 0);
+        assert_eq!(summary.switch_count, 0);
+        assert_eq!(summary.focus_score, 0);
+    }
+
+    #[test]
+    fn test_daily_summary_with_data() {
+        let (store, _tmp) = tmp_store();
+        let date = chrono::Local::now().date_naive();
+        let ts = date.and_hms_opt(10, 0, 0).unwrap();
+        store
+            .insert_activity(ts, "code", "main.rs", Category::Code, 7200)
+            .unwrap();
+        store
+            .insert_activity(ts, "twitter", "feed", Category::Distraction, 1800)
+            .unwrap();
+        let summary = DailySummary::for_date(&store, date).unwrap();
+        assert_eq!(summary.total_tracked, 9000);
+        assert_eq!(summary.by_category.len(), 2);
+        assert!(summary.focus_score > 0);
+    }
+
+    #[test]
+    fn test_multiple_activities_same_day() {
+        let (store, _tmp) = tmp_store();
+        let date = chrono::Local::now().date_naive();
+        for h in 8..18 {
+            let ts = date.and_hms_opt(h, 0, 0).unwrap();
+            store
+                .insert_activity(ts, "code", &format!("f{}.rs", h), Category::Code, 300)
+                .unwrap();
+        }
+        let activities = store.activities_for_date(date).unwrap();
+        assert_eq!(activities.len(), 10);
     }
 }
 

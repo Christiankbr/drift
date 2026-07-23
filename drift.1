@@ -1,0 +1,244 @@
+.TH DRIFT 1 "2026-07-23" "drift 0.9.0" "User Commands"
+.SH NAME
+drift \- developer-focused context switch tracker
+.SH SYNOPSIS
+.B drift
+.RI [ COMMAND ]
+.RI [ OPTIONS ]
+.SH DESCRIPTION
+.B drift
+tracks your active window/app, detects context switches, quantifies focus
+loss, and shows you exactly how much your attention is drifting.
+.PP
+It polls your active window every N seconds (default 2), classifies it into
+a category (code, distraction, communication, research, system, other),
+and records activities, switches, and focus sessions. The focus score
+(0\[en]100) is calculated from distraction ratio, focus loss, and switch
+count. Context switch cost defaults to 23 minutes based on research,
+adjusted by switch type.
+.PP
+Supported platforms:
+.RS
+.IP \(bu 2
+Linux: x11rb + xdotool fallback
+.IP \(bu 2
+macOS: Cocoa/objc
+.IP \(bu 2
+Windows: Win32 API
+.RE
+.SH COMMANDS
+.SS drift init
+Interactive setup wizard. Creates a default config and database.
+.SS drift track [\-i SECS] [\-a]
+Start the foreground tracker. Blocks the terminal.
+.TP
+.B \-i, \-\-interval SECS
+Polling interval in seconds (default: 2).
+.TP
+.B \-a, \-\-alert
+Enable desktop alerts on distraction (rate limited: 1 per 5 min).
+.SS drift daemon start|stop|status [\-i SECS] [\-a]
+Background daemon with PID file management.
+.TP
+.B \-i, \-\-interval SECS
+Polling interval in seconds (default: 2).
+.TP
+.B \-a, \-\-alert
+Enable desktop alerts on distraction.
+.SS drift status [\-\-json]
+Show today's focus summary.
+.TP
+.B \-\-json
+Output as JSON (for scripting/piping).
+.SS drift report [\-d YYYY-MM-DD]
+Generate a daily report with categories, switches, and insights.
+.TP
+.B \-d, \-\-date DATE
+Date in YYYY-MM-DD format (default: today).
+.SS drift week
+Generate a weekly report (last 7 days) with trend comparison.
+.SS drift summary [\-d N]
+Show N-day summary with daily averages and trend indicators.
+.TP
+.B \-d, \-\-days N
+Number of days to show (default: 14).
+.SS drift timeline [\-d YYYY-MM-DD]
+Show an hourly ASCII bar chart of the day with per-category breakdowns.
+.TP
+.B \-d, \-\-date DATE
+Date in YYYY-MM-DD format (default: today).
+.SS drift avg
+Show rolling averages across 7-day, 14-day, and 30-day windows.
+.SS drift insights
+Show 7-day pattern analysis: best focus hours, top distractions.
+.SS drift compare [\-\-date1 X \-\-date2 Y] [\-\-week]
+Compare two days or two weeks.
+.TP
+.B \-\-date1 DATE
+First date for comparison (YYYY-MM-DD).
+.TP
+.B \-\-date2 DATE
+Second date for comparison (YYYY-MM-DD).
+.TP
+.B \-\-week
+Compare this week vs last week.
+.SS drift streaks [\-d N]
+Show streak history with progress bars.
+.TP
+.B \-d, \-\-days N
+Number of days to show (default: 7).
+.SS drift goals [show|set KEY VALUE]
+Show or set daily goals. Trackable metrics: focus time, context switches,
+distraction minutes.
+.SS drift log [\-d DATE] [\-c CAT] [\-S] [\-n N]
+Show raw activity or switch logs.
+.TP
+.B \-d, \-\-date DATE
+Date in YYYY-MM-DD format (default: today).
+.TP
+.B \-c, \-\-category CAT
+Filter by category.
+.TP
+.B \-S, \-\-switches
+Show switches instead of activities.
+.TP
+.B \-n, \-\-limit N
+Number of entries to show (default: 50).
+.SS drift focus N
+Start an N-minute focus session with switch tracking.
+.SS drift watch
+Live active window monitor with color-coded categories.
+.SS drift show
+Open the TUI dashboard.
+.SS drift export \-f json|csv [\-d DATE]
+Export data as JSON or CSV.
+.TP
+.B \-f, \-\-format FORMAT
+Output format: json or csv (default: json).
+.TP
+.B \-d, \-\-date DATE
+Date in YYYY-MM-DD format (default: today).
+.SS drift config show|edit|path [KEY] [VALUE]
+View and modify config.
+.RS
+.IP \(bu 2
+.B show
+\(em print current config
+.IP \(bu 2
+.B edit KEY VALUE
+\(em set a config key
+.IP \(bu 2
+.B path
+\(em print config file path
+.RE
+.SS drift ignore add|remove|list [APP]
+Manage ignored apps via .driftignore.
+.SS drift preset development|writing|research
+Apply a config preset.
+.SS drift presets
+List available config presets.
+.SS drift doctor
+Run diagnostics: config validity, database health, daemon status, tracker
+platform, and display output.
+.SS drift reset [\-\-yes]
+Wipe all tracking data. Prompts for confirmation unless \-\-yes is given.
+.TP
+.B \-\-yes
+Skip confirmation prompt.
+.SS drift completions bash|zsh|fish|powershell
+Generate shell completion scripts.
+.SS drift export-config [\-o FILE]
+Export config as JSON to stdout or a file.
+.TP
+.B \-o, \-\-output PATH
+Output file path (default: stdout).
+.SS drift import PATH
+Import config from a JSON file.
+.SH CONFIG
+Configuration lives at
+.I ~/.config/drift/config.toml.
+.PP
+Key fields:
+.PP
+.RS
+.nf
+poll_interval_secs = 2
+switching_cost_mins = 23
+streak_goal_mins = 90
+
+[categories]
+code = ["code", "vim", "neovim", "terminal", "cursor", "zed"]
+distraction = ["twitter", "youtube", "reddit", "discord"]
+communication = ["slack", "teams", "zoom", "telegram"]
+research = ["firefox", "chrome", "brave", "safari"]
+system = ["finder", "nautilus", "explorer", "settings"]
+
+ignored_apps = ["screensaver"]
+focus_block = ["discord", "telegram"]
+.fi
+.RE
+.PP
+A
+.I .driftignore
+file (one app per line, # for comments) can be placed in your working
+directory to exclude apps from tracking.
+.SH FILES
+.TP
+.I ~/.config/drift/config.toml
+Main configuration file.
+.TP
+.I ~/.config/drift/drift.db
+SQLite database storing activities, switches, and sessions.
+.TP
+.I ~/.config/drift/drift.pid
+PID file for daemon management.
+.TP
+.I .driftignore
+Per-project ignore file for apps that should not be tracked.
+.SH ENVIRONMENT
+No environment variables are currently used. All configuration is via
+config.toml and .driftignore.
+.SH EXAMPLES
+.TP
+Basic daily usage:
+.B drift daemon start
+.br
+.B drift status
+.br
+.B drift report
+.TP
+Start a 25-minute focus session:
+.B drift focus 25
+.TP
+Compare two days:
+.B drift compare \-\-date1 2026-07-20 \-\-date2 2026-07-21
+.TP
+Compare week-over-week:
+.B drift compare \-\-week
+.TP
+Export today's data as CSV:
+.B drift export \-f csv \-d 2026-07-23
+.TP
+Apply the development preset:
+.B drift preset development
+.TP
+Add an app to .driftignore:
+.B drift ignore add spotify
+.TP
+Generate bash completions:
+.B drift completions bash > /etc/bash_completion.d/drift
+.TP
+Export config to a file:
+.B drift export-config \-o my-config.json
+.TP
+Import config from a file:
+.B drift import my-config.json
+.SH SEE ALSO
+.BR cargo (1),
+.BR xdotool (1)
+.SH BUGS
+Report issues at
+.UR https://github.com/Christiankbr/drift/issues
+.UE
+.SH AUTHOR
+Christian Kbr <christian@lymeagency.com>

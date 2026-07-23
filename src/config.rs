@@ -54,13 +54,35 @@ impl Config {
         let path = Self::config_path();
         if path.exists() {
             let content = std::fs::read_to_string(&path)?;
-            let config: Config = toml::from_str(&content)?;
-            Ok(config.with_defaults())
+            let mut config: Config = toml::from_str(&content)?;
+            config = config.with_defaults();
+            config = config.with_env_overrides();
+            Ok(config)
         } else {
-            let config = Config::default();
+            let mut config = Config::default();
+            config = config.with_env_overrides();
             config.save()?;
             Ok(config)
         }
+    }
+
+    fn with_env_overrides(mut self) -> Self {
+        if let Ok(v) = std::env::var("DRIFT_POLL_INTERVAL")
+            && let Ok(n) = v.parse()
+        {
+            self.poll_interval_secs = n;
+        }
+        if let Ok(v) = std::env::var("DRIFT_SWITCH_COST")
+            && let Ok(n) = v.parse()
+        {
+            self.switching_cost_mins = n;
+        }
+        if let Ok(v) = std::env::var("DRIFT_STREAK_GOAL")
+            && let Ok(n) = v.parse()
+        {
+            self.streak_goal_mins = n;
+        }
+        self
     }
 
     pub fn save(&self) -> Result<()> {
@@ -439,5 +461,53 @@ mod tests {
         assert_eq!(with_defaults.poll_interval_secs, 2);
         assert_eq!(with_defaults.switching_cost_mins, 23);
         assert_eq!(with_defaults.streak_goal_mins, 90);
+    }
+
+    #[test]
+    fn test_config_env_overrides() {
+        unsafe {
+            std::env::set_var("DRIFT_POLL_INTERVAL", "10");
+            std::env::set_var("DRIFT_SWITCH_COST", "15");
+            std::env::set_var("DRIFT_STREAK_GOAL", "120");
+        }
+        let config = Config::default();
+        let with_env = config.with_env_overrides();
+        assert_eq!(with_env.poll_interval_secs, 10);
+        assert_eq!(with_env.switching_cost_mins, 15);
+        assert_eq!(with_env.streak_goal_mins, 120);
+        unsafe {
+            std::env::remove_var("DRIFT_POLL_INTERVAL");
+            std::env::remove_var("DRIFT_SWITCH_COST");
+            std::env::remove_var("DRIFT_STREAK_GOAL");
+        }
+    }
+
+    #[test]
+    fn test_classify_case_insensitive() {
+        let config = Config::default();
+        assert_eq!(config.classify("CODE"), Category::Code);
+        assert_eq!(config.classify("Code"), Category::Code);
+        assert_eq!(config.classify("FIREFOX"), Category::Research);
+        assert_eq!(config.classify("Twitter"), Category::Distraction);
+    }
+
+    #[test]
+    fn test_classify_custom_category_rules() {
+        let mut config = Config::default();
+        config.categories.code.push("myeditor".to_string());
+        assert_eq!(config.classify("myeditor"), Category::Code);
+    }
+
+    #[test]
+    fn test_category_as_str() {
+        assert_eq!(Category::Code.as_str(), "code");
+        assert_eq!(Category::Distraction.as_str(), "distraction");
+        assert_eq!(Category::Other.as_str(), "other");
+    }
+
+    #[test]
+    fn test_category_display() {
+        assert_eq!(format!("{}", Category::Code), "code");
+        assert_eq!(format!("{}", Category::Distraction), "distraction");
     }
 }

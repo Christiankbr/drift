@@ -193,6 +193,30 @@ enum Commands {
         #[arg(short, long)]
         output: Option<String>,
     },
+    /// GitHub-style activity heatmap (last 12 weeks)
+    Heatmap,
+    /// All-time best streaks leaderboard
+    StreakBest,
+    /// Deep pattern analysis (weekday×hour matrix, distraction chains, recovery)
+    Patterns,
+    /// Generate SVG focus badge for README/website
+    Badge {
+        /// Output file path (default: stdout)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+    /// Export tracking data as JSON bundle (for sync between machines)
+    SyncExport {
+        /// Output file path
+        #[arg(short, long)]
+        output: String,
+    },
+    /// Import tracking data from JSON bundle
+    SyncImport {
+        /// Input file path
+        #[arg(short, long)]
+        input: String,
+    },
 }
 
 fn main() -> Result<()> {
@@ -342,6 +366,36 @@ fn main() -> Result<()> {
                 }
                 None => println!("{}", json),
             }
+        }
+        Some(Commands::Heatmap) => {
+            let config = config::Config::load()?;
+            let store = store::Store::open(&config.db_path())?;
+            extra::heatmap(&store, &config)?;
+        }
+        Some(Commands::StreakBest) => {
+            let config = config::Config::load()?;
+            let store = store::Store::open(&config.db_path())?;
+            extra::streak_best(&store, &config)?;
+        }
+        Some(Commands::Patterns) => {
+            let config = config::Config::load()?;
+            let store = store::Store::open(&config.db_path())?;
+            extra::patterns(&store, &config)?;
+        }
+        Some(Commands::Badge { output }) => {
+            let config = config::Config::load()?;
+            let store = store::Store::open(&config.db_path())?;
+            extra::badge(&store, &config, output.as_deref())?;
+        }
+        Some(Commands::SyncExport { output }) => {
+            let config = config::Config::load()?;
+            let store = store::Store::open(&config.db_path())?;
+            extra::sync_export(&store, &output)?;
+        }
+        Some(Commands::SyncImport { input }) => {
+            let config = config::Config::load()?;
+            let store = store::Store::open(&config.db_path())?;
+            extra::sync_import(&store, &input)?;
         }
         _ => {
             let config = config::Config::load()?;

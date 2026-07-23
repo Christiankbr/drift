@@ -15,7 +15,6 @@ pub fn classify(app_name: &str, _window_title: &str, config: &crate::config::Con
 pub fn suggest_from_title(title: &str) -> Option<Category> {
     let t = title.to_lowercase();
 
-    // Code-related titles
     if t.contains(".rs")
         || t.contains(".py")
         || t.contains(".ts")
@@ -30,7 +29,6 @@ pub fn suggest_from_title(title: &str) -> Option<Category> {
         return Some(Category::Code);
     }
 
-    // Social media
     if t.contains("twitter")
         || t.contains("x.com")
         || t.contains("reddit")
@@ -41,7 +39,6 @@ pub fn suggest_from_title(title: &str) -> Option<Category> {
         return Some(Category::Distraction);
     }
 
-    // Communication
     if t.contains("slack")
         || t.contains("discord")
         || t.contains("teams")
@@ -53,4 +50,54 @@ pub fn suggest_from_title(title: &str) -> Option<Category> {
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+
+    #[test]
+    fn test_suggest_from_title_code() {
+        assert_eq!(suggest_from_title("main.rs"), Some(Category::Code));
+        assert_eq!(suggest_from_title("app.tsx"), Some(Category::Code));
+        assert_eq!(suggest_from_title("cargo build"), Some(Category::Code));
+        assert_eq!(suggest_from_title("npm install"), Some(Category::Code));
+    }
+
+    #[test]
+    fn test_suggest_from_title_distraction() {
+        assert_eq!(
+            suggest_from_title("twitter - home"),
+            Some(Category::Distraction)
+        );
+        assert_eq!(
+            suggest_from_title("youtube - cats"),
+            Some(Category::Distraction)
+        );
+    }
+
+    #[test]
+    fn test_suggest_from_title_communication() {
+        assert_eq!(
+            suggest_from_title("slack - general"),
+            Some(Category::Communication)
+        );
+        assert_eq!(
+            suggest_from_title("zoom meeting"),
+            Some(Category::Communication)
+        );
+    }
+
+    #[test]
+    fn test_suggest_from_title_none() {
+        assert_eq!(suggest_from_title("random document"), None);
+    }
+
+    #[test]
+    fn test_classify_delegates_to_config() {
+        let config = Config::default();
+        assert_eq!(classify("code", "", &config), Category::Code);
+        assert_eq!(classify("twitter", "", &config), Category::Distraction);
+    }
 }
