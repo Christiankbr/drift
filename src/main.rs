@@ -78,7 +78,11 @@ enum Commands {
         date: Option<String>,
     },
     /// Show current status
-    Status,
+    Status {
+        /// Output as JSON (for scripting/piping)
+        #[arg(long)]
+        json: bool,
+    },
     /// Initialize drift config
     Init,
     /// Live watch mode: show active window in real-time
@@ -103,6 +107,33 @@ enum Commands {
     },
     /// Show insights from your tracking data (last 7 days)
     Insights,
+    /// Show or edit config
+    Config {
+        /// Subcommand: show, edit, or path
+        action: Option<String>,
+        /// Key to edit (e.g. poll_interval_secs)
+        key: Option<String>,
+        /// New value for the key
+        value: Option<String>,
+    },
+    /// Show raw activity logs
+    Log {
+        /// Date in YYYY-MM-DD format (default: today)
+        #[arg(short, long)]
+        date: Option<String>,
+        /// Filter by category
+        #[arg(short, long)]
+        category: Option<String>,
+        /// Number of entries to show (default: 50)
+        #[arg(short, long, default_value = "50")]
+        limit: usize,
+    },
+    /// Reset tracking data (with confirmation)
+    Reset {
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
     /// Compare two days or two weeks
     Compare {
         /// First date for comparison (YYYY-MM-DD)
@@ -187,6 +218,21 @@ fn main() -> Result<()> {
             let store = store::Store::open(&config.db_path())?;
             insights::insights(&store, &config)?;
         }
+        Some(Commands::Config { action, key, value }) => {
+            handle_config(action.as_deref(), key.as_deref(), value.as_deref())?;
+        }
+        Some(Commands::Log {
+            date,
+            category,
+            limit,
+        }) => {
+            let config = config::Config::load()?;
+            let store = store::Store::open(&config.db_path())?;
+            show_log(&store, date.as_deref(), category.as_deref(), limit)?;
+        }
+        Some(Commands::Reset { yes }) => {
+            handle_reset(yes)?;
+        }
         Some(Commands::Compare { date1, date2, week }) => {
             let config = config::Config::load()?;
             let store = store::Store::open(&config.db_path())?;
@@ -212,8 +258,12 @@ fn main() -> Result<()> {
                 Some(Commands::Export { format, date }) => {
                     report::export(&store, &config, &format, date.as_deref())?;
                 }
-                Some(Commands::Status) => {
-                    print_status(&store, &config)?;
+                Some(Commands::Status { json }) => {
+                    if json {
+                        print_status_json(&store, &config)?;
+                    } else {
+                        print_status(&store, &config)?;
+                    }
                 }
                 None => {
                     tui::run_dashboard(&store, &config)?;
@@ -334,6 +384,178 @@ fn print_status(store: &store::Store, config: &config::Config) -> Result<()> {
     }
     println!();
 
+    Ok(())
+}
+
+fn handle_config(action: Option<&str>, key: Option<&str>, value: Option<&str>) -> Result<()> {
+    let action = action.unwrap_or("show");
+    match action {
+        "show" => {
+            let config = config::Config::load()?;
+            let path = config::Config::config_path();
+            println!("\n  {}\n", "drift config".cyan().bold());
+            println!("  {} {}", "Path".dimmed(), path.display());
+            println!("  {}", "─".repeat(37).dimmed());
+            println!(
+                "  {:<20} {}",
+                "poll_interval_secs", config.poll_interval_secs
+            );
+            println!(
+                "  {:<20} {}",
+                "switching_cost_mins", config.switching_cost_mins
+            );
+            println!("  {:<20} {}", "streak_goal_mins", config.streak_goal_mins);
+            println!(
+                "  {:<20} {}",
+                "ignored_apps",
+                config.ignored_apps.join(", ")
+            );
+            println!("  {:<20} {} items", "focus_block", config.focus_block.len());
+            for (cat, apps) in [
+                ("code", &config.categories.code),
+                ("distraction", &config.categories.distraction),
+                ("communication", &config.categories.communication),
+                ("research", &config.categories.research),
+                ("system", &config.categories.system),
+            ] {
+                println!("  {:<20} {}", cat, apps.join(", "));
+            }
+            println!();
+        }
+        "edit" => {
+            let (key, value) = match (key, value) {
+                (Some(k), Some(v)) => (k, v),
+                _ => {
+                    eprintln!("  Usage: drift config edit <key> <value>");
+                    eprintln!("  Keys: poll_interval_secs, switching_cost_mins, streak_goal_mins");
+                    std::process::exit(1);
+                }
+            };
+            let mut config = config::Config::load()?;
+            match key {
+                "poll_interval_secs" => config.poll_interval_secs = value.parse()?,
+                "switching_cost_mins" => config.switching_cost_mins = value.parse()?,
+                "streak_goal_mins" => config.streak_goal_mins = value.parse()?,
+                other => {
+                    eprintln!("  [!] Unknown key: {}", other);
+                    eprintln!(
+                        "      Keys: poll_interval_secs, switching_cost_mins, streak_goal_mins"
+                    );
+                    std::process::exit(1);
+                }
+            }
+            config.save()?;
+            println!("  {} {} = {}", "Updated".green().bold(), key, value);
+        }
+        "path" => {
+            let path = config::Config::config_path();
+            println!("{}", path.display());
+        }
+        other => {
+            eprintln!("  [!] Unknown config action: {}", other);
+            eprintln!("      Use: show, edit, or path");
+            std::process::exit(1);
+        }
+    }
+    Ok(())
+}
+
+fn show_log(
+    store: &store::Store,
+    date: Option<&str>,
+    category: Option<&str>,
+    limit: usize,
+) -> Result<()> {
+    let date = if let Some(d) = date {
+        chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")?
+    } else {
+        chrono::Local::now().date_naive()
+    };
+
+    let activities = store.activities_for_date(date)?;
+
+    println!(
+        "\n  {}\n",
+        format!("drift log, {}", date.format("%Y-%m-%d"))
+            .cyan()
+            .bold()
+    );
+    println!("  {}", "─".repeat(37).dimmed());
+
+    let filtered: Vec<_> = if let Some(cat) = category {
+        activities.iter().filter(|a| a.category == cat).collect()
+    } else {
+        activities.iter().collect()
+    };
+
+    if filtered.is_empty() {
+        println!("  {}", "No entries found.".dimmed());
+        println!();
+        return Ok(());
+    }
+
+    let count = filtered.len().min(limit);
+    println!(
+        "  {} entries (showing {}){}\n",
+        filtered.len(),
+        count,
+        "".dimmed()
+    );
+
+    for a in filtered.iter().take(limit) {
+        println!(
+            "  {}  {:<20}  {}  {}",
+            a.timestamp.format("%H:%M:%S").to_string().dimmed(),
+            a.app_name,
+            ui::category_color(&a.category),
+            format_duration(a.duration_secs).dimmed()
+        );
+    }
+    println!();
+
+    Ok(())
+}
+
+fn handle_reset(yes: bool) -> Result<()> {
+    if !yes {
+        use std::io::{self, Write};
+        print!("\n  This will delete ALL tracking data. Type 'yes' to confirm: ");
+        io::stdout().flush()?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        if input.trim() != "yes" {
+            println!("  Cancelled.");
+            return Ok(());
+        }
+    }
+
+    let config = config::Config::load()?;
+    let db_path = config.db_path();
+    std::fs::remove_file(&db_path)?;
+    let store = store::Store::open(&db_path)?;
+    drop(store);
+    println!("  {} All tracking data reset.", "Done.".green().bold());
+    println!("  DB: {}", db_path.display());
+    println!();
+    Ok(())
+}
+
+fn print_status_json(store: &store::Store, config: &config::Config) -> Result<()> {
+    let today = chrono::Local::now().date_naive();
+    let summary = store::DailySummary::for_date(store, today)?;
+    let streak = store.longest_streak_for_date(today)?;
+
+    let json = serde_json::json!({
+        "date": today.format("%Y-%m-%d").to_string(),
+        "tracked_secs": summary.total_tracked,
+        "switches": summary.switch_count,
+        "focus_loss_secs": summary.focus_loss,
+        "focus_score": summary.focus_score,
+        "best_streak_secs": streak,
+        "streak_goal_mins": config.streak_goal_mins,
+        "by_category": summary.by_category.iter().map(|(k, v)| (k.clone(), v)).collect::<std::collections::HashMap<_, _>>()
+    });
+    println!("{}", serde_json::to_string_pretty(&json)?);
     Ok(())
 }
 

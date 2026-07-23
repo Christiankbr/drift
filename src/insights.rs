@@ -2,12 +2,12 @@ use crate::config::Config;
 use crate::store::Store;
 use anyhow::Result;
 use chrono::{Datelike, Local, Timelike, Weekday};
+use colored::Colorize;
 use std::collections::HashMap;
 
 pub fn insights(store: &Store, _config: &Config) -> Result<()> {
     let today = Local::now().date_naive();
 
-    // Collect data for the last 7 days
     let mut all_activities = Vec::new();
     let mut all_switches = Vec::new();
 
@@ -19,15 +19,16 @@ pub fn insights(store: &Store, _config: &Config) -> Result<()> {
         all_switches.extend(switches);
     }
 
+    println!("\n  {}", "drift, insights (last 7 days)".cyan().bold());
+    println!("  {}\n", "─".repeat(37).dimmed());
+
     if all_activities.is_empty() {
-        println!("\n  drift, insights (last 7 days)\n");
-        println!("  ─────────────────────────────────────\n");
-        println!("  No data yet. Start tracking with: drift track\n");
+        println!(
+            "  No data yet. Start tracking with: {}\n",
+            "drift track".cyan()
+        );
         return Ok(());
     }
-
-    println!("\n  drift, insights (last 7 days)\n");
-    println!("  ─────────────────────────────────────\n");
 
     // 1. Most frequent switch target
     let switch_to_counts: HashMap<&str, u32> =
@@ -43,12 +44,12 @@ pub fn insights(store: &Store, _config: &Config) -> Result<()> {
     if let Some((cat, count)) = most_switched_to {
         let per_day = count as f64 / 7.0;
         let app_label = match cat {
-            "distraction" => "distractions",
-            "communication" => "communication apps",
-            "research" => "research/browser",
-            "code" => "code editors",
-            "system" => "system tools",
-            _ => "other apps",
+            "distraction" => "distractions".red(),
+            "communication" => "communication apps".yellow(),
+            "research" => "research/browser".blue(),
+            "code" => "code editors".green(),
+            "system" => "system tools".dimmed(),
+            _ => "other apps".white(),
         };
         println!(
             "  You switch to {} most often ({:.1}x/day, {}x total)",
@@ -56,7 +57,7 @@ pub fn insights(store: &Store, _config: &Config) -> Result<()> {
         );
     }
 
-    // 1b. Most frequent specific app switches (by app name)
+    // 1b. Most frequent specific app switches
     let mut app_switch_counts: HashMap<String, u32> = HashMap::new();
     for a in &all_activities {
         if a.category == "distraction" || a.category == "communication" {
@@ -71,12 +72,13 @@ pub fn insights(store: &Store, _config: &Config) -> Result<()> {
     if let Some((ref app, count)) = top_app {
         let per_day = count as f64 / 7.0;
         println!(
-            "  Your top distraction app is \"{}\" ({:.1}x/day)",
-            app, per_day
+            "  Your top distraction app is {} ({:.1}x/day)",
+            app.red().bold(),
+            per_day
         );
     }
 
-    // 2. Best focus time (hour of day with most focus time)
+    // 2. Best focus time
     let mut hour_focus: HashMap<u32, u64> = HashMap::new();
     for a in &all_activities {
         if a.category == "code" || a.category == "research" {
@@ -92,10 +94,10 @@ pub fn insights(store: &Store, _config: &Config) -> Result<()> {
     if let Some((hour, dur)) = best_hour {
         let next_hour = (hour + 1) % 24;
         println!(
-            "  Your best focus time is {}-{} ({} of focused work)",
-            format_hour(hour),
-            format_hour(next_hour),
-            format_duration(dur)
+            "  Best focus time: {}{}  ({} focused)",
+            format_hour(hour).green().bold(),
+            format!("-{}", format_hour(next_hour)).green(),
+            format_duration(dur).dimmed()
         );
     }
 
@@ -116,21 +118,21 @@ pub fn insights(store: &Store, _config: &Config) -> Result<()> {
     if let Some((wd, dur)) = best_weekday {
         println!(
             "  {}s are your most productive day ({} focused)",
-            weekday_name(wd),
-            format_duration(dur)
+            weekday_name(wd).green().bold(),
+            format_duration(dur).dimmed()
         );
     }
 
-    // 4. Estimate context switching time loss
+    // 4. Context switching time loss
     let total_switch_cost_secs: u64 = all_switches.iter().map(|s| s.cost_mins * 60).sum();
     let per_day_loss = total_switch_cost_secs / 7;
     println!(
         "  You lose ~{}/day to context switching ({} over 7 days)",
-        format_duration(per_day_loss),
-        format_duration(total_switch_cost_secs)
+        format_duration(per_day_loss).yellow(),
+        format_duration(total_switch_cost_secs).dimmed()
     );
 
-    // 5. Distraction time total
+    // 5. Distraction time
     let distraction_total: u64 = all_activities
         .iter()
         .filter(|a| a.category == "distraction")
@@ -140,31 +142,37 @@ pub fn insights(store: &Store, _config: &Config) -> Result<()> {
     if distraction_per_day > 0 {
         println!(
             "  You spend ~{}/day on distractions ({} total)",
-            format_duration(distraction_per_day),
-            format_duration(distraction_total)
+            format_duration(distraction_per_day).red(),
+            format_duration(distraction_total).dimmed()
         );
     }
 
-    // 6. Actionable recommendations
-    println!("\n  Recommendations:\n");
+    // 6. Recommendations
+    println!("\n  {}\n", "Recommendations".dimmed());
 
     if let Some((ref app, count)) = top_app {
         let per_day = count as f64 / 7.0;
         if per_day > 5.0 {
-            println!("  → Try blocking \"{}\" during morning focus hours", app);
+            println!(
+                "  {} Try blocking {} during morning focus hours",
+                "→".cyan(),
+                app.red()
+            );
         }
     }
 
     if let Some((hour, _)) = best_hour {
         if hour < 12 {
             println!(
-                "  → Protect your morning focus ({}-{}h) — avoid Slack/email",
+                "  {} Protect your morning focus ({}-{}h) — avoid Slack/email",
+                "→".cyan(),
                 hour,
                 hour + 1
             );
         } else {
             println!(
-                "  → Your peak focus is at {}h — schedule deep work then",
+                "  {} Your peak focus is at {}h — schedule deep work then",
+                "→".cyan(),
                 hour
             );
         }
@@ -172,23 +180,27 @@ pub fn insights(store: &Store, _config: &Config) -> Result<()> {
 
     if per_day_loss > 3600 {
         println!(
-            "  → You're losing {}+/day to switching — try batching communication",
-            format_duration(per_day_loss)
+            "  {} You're losing {}+/day to switching — try batching communication",
+            "→".cyan(),
+            format_duration(per_day_loss).yellow()
         );
     }
 
     if distraction_per_day > 1800 {
         println!(
-            "  → {}+/day on distractions — consider a site blocker or focus mode",
-            format_duration(distraction_per_day)
+            "  {} {}+/day on distractions — consider a site blocker or focus mode",
+            "→".cyan(),
+            format_duration(distraction_per_day).red()
         );
     }
 
     let total_switches = all_switches.len();
     if total_switches > 100 {
         println!(
-            "  → {} switches in 7 days — try the Pomodoro technique (drift focus 25)",
-            total_switches
+            "  {} {} switches in 7 days — try Pomodoro ({})",
+            "→".cyan(),
+            total_switches,
+            "drift focus 25".cyan()
         );
     }
 

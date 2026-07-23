@@ -1,7 +1,9 @@
 use crate::config::Config;
 use crate::store::{DailySummary, Store};
+use crate::ui;
 use anyhow::Result;
 use chrono::{Local, NaiveDate};
+use colored::Colorize;
 
 pub fn compare(
     store: &Store,
@@ -32,37 +34,32 @@ fn compare_days(store: &Store, date1: NaiveDate, date2: NaiveDate) -> Result<()>
     let s1 = DailySummary::for_date(store, date1)?;
     let s2 = DailySummary::for_date(store, date2)?;
 
-    println!("\n  drift, day comparison\n");
-    println!("  ─────────────────────────────────────\n");
+    println!("\n  {}", "drift, day comparison".cyan().bold());
+    println!("  {}\n", "─".repeat(37).dimmed());
 
     print_day_header(&date1, &date2);
     print_row(
         "Focus score",
-        &format!("{}", s1.focus_score),
-        &format!("{}", s2.focus_score),
-        "higher is better",
+        &ui::focus_score(s1.focus_score),
+        &ui::focus_score(s2.focus_score),
     );
     print_row(
-        "Tracked time",
+        "Tracked",
         &format_duration(s1.total_tracked),
         &format_duration(s2.total_tracked),
-        "more is better",
     );
     print_row(
-        "Context switches",
+        "Switches",
         &format!("{}", s1.switch_count),
         &format!("{}", s2.switch_count),
-        "lower is better",
     );
     print_row(
         "Focus loss",
         &format_duration(s1.focus_loss),
         &format_duration(s2.focus_loss),
-        "lower is better",
     );
 
-    // Category breakdown
-    println!("\n  By category:\n");
+    println!("\n  {}\n", "By category".dimmed());
     let mut all_cats: Vec<String> = s1
         .by_category
         .iter()
@@ -85,20 +82,23 @@ fn compare_days(store: &Store, date1: NaiveDate, date2: NaiveDate) -> Result<()>
             .find(|(c, _)| c == cat)
             .map(|(_, d)| *d)
             .unwrap_or(0);
-        print_row(cat, &format_duration(d1), &format_duration(d2), "");
+        print_row(
+            &ui::category_color(cat),
+            &format_duration(d1),
+            &format_duration(d2),
+        );
     }
 
-    // Delta summary
-    println!("\n  Deltas:\n");
+    println!("\n  {}\n", "Deltas".dimmed());
     let score_delta = s2.focus_score as i64 - s1.focus_score as i64;
     let switch_delta = s2.switch_count as i64 - s1.switch_count as i64;
     let loss_delta = s2.focus_loss as i64 - s1.focus_loss as i64;
     let tracked_delta = s2.total_tracked as i64 - s1.total_tracked as i64;
 
     print_delta("Focus score", score_delta, true);
-    print_delta("Context switches", switch_delta, false);
-    print_delta("Focus loss (secs)", loss_delta, false);
-    print_delta("Tracked time (secs)", tracked_delta, true);
+    print_delta("Switches", switch_delta, false);
+    print_delta("Focus loss", loss_delta, false);
+    print_delta("Tracked", tracked_delta, true);
 
     println!();
     Ok(())
@@ -107,8 +107,6 @@ fn compare_days(store: &Store, date1: NaiveDate, date2: NaiveDate) -> Result<()>
 fn compare_weeks(store: &Store) -> Result<()> {
     let today = Local::now().date_naive();
 
-    // This week: last 7 days
-    // Last week: days 7-14
     let mut this_week = WeekData::default();
     let mut last_week = WeekData::default();
 
@@ -126,8 +124,8 @@ fn compare_weeks(store: &Store) -> Result<()> {
     let this_week_start = today - chrono::Duration::days(6);
     let last_week_start = today - chrono::Duration::days(13);
 
-    println!("\n  drift, week comparison\n");
-    println!("  ─────────────────────────────────────\n");
+    println!("\n  {}", "drift, week comparison".cyan().bold());
+    println!("  {}\n", "─".repeat(37).dimmed());
 
     print_day_header(&last_week_start, &this_week_start);
 
@@ -141,47 +139,41 @@ fn compare_weeks(store: &Store) -> Result<()> {
         .unwrap_or(0);
 
     print_row(
-        "Avg focus score",
-        &format!("{}", avg_score_last),
-        &format!("{}", avg_score_this),
-        "higher is better",
+        "Avg score",
+        &ui::focus_score(avg_score_last),
+        &ui::focus_score(avg_score_this),
     );
     print_row(
-        "Total switches",
+        "Switches",
         &format!("{}", last_week.switch_count),
         &format!("{}", this_week.switch_count),
-        "lower is better",
     );
     print_row(
-        "Total focus loss",
+        "Focus loss",
         &format_duration(last_week.focus_loss),
         &format_duration(this_week.focus_loss),
-        "lower is better",
     );
     print_row(
-        "Total tracked",
+        "Tracked",
         &format_duration(last_week.total_tracked),
         &format_duration(this_week.total_tracked),
-        "more is better",
     );
     print_row(
-        "Total distraction",
+        "Distraction",
         &format_duration(last_week.distraction_time),
         &format_duration(this_week.distraction_time),
-        "lower is better",
     );
 
-    // Deltas
-    println!("\n  Deltas:\n");
+    println!("\n  {}\n", "Deltas".dimmed());
     let score_delta = avg_score_this as i64 - avg_score_last as i64;
     let switch_delta = this_week.switch_count as i64 - last_week.switch_count as i64;
     let loss_delta = this_week.focus_loss as i64 - last_week.focus_loss as i64;
     let tracked_delta = this_week.total_tracked as i64 - last_week.total_tracked as i64;
 
-    print_delta("Avg focus score", score_delta, true);
-    print_delta("Total switches", switch_delta, false);
-    print_delta("Total focus loss (secs)", loss_delta, false);
-    print_delta("Total tracked (secs)", tracked_delta, true);
+    print_delta("Avg score", score_delta, true);
+    print_delta("Switches", switch_delta, false);
+    print_delta("Focus loss", loss_delta, false);
+    print_delta("Tracked", tracked_delta, true);
 
     println!();
     Ok(())
@@ -215,37 +207,22 @@ impl WeekData {
 fn print_day_header(date1: &NaiveDate, date2: &NaiveDate) {
     println!(
         "  {:<20}  {:<14}  {:<14}",
-        "Metric",
-        date1.format("%a %b %d"),
-        date2.format("%a %b %d")
+        "Metric".dimmed(),
+        date1.format("%a %b %d").to_string().dimmed(),
+        date2.format("%a %b %d").to_string().dimmed()
     );
-    println!("  {}", "─".repeat(52));
+    println!("  {}", "─".repeat(52).dimmed());
 }
 
-fn print_row(label: &str, val1: &str, val2: &str, _hint: &str) {
+fn print_row(label: &str, val1: &str, val2: &str) {
     println!("  {:<20}  {:<14}  {:<14}", label, val1, val2);
 }
 
 fn print_delta(label: &str, delta: i64, positive_is_good: bool) {
-    let sign = if delta > 0 { "+" } else { "" };
-    let arrow = if delta > 0 {
-        "↑"
-    } else if delta < 0 {
-        "↓"
-    } else {
-        "→"
-    };
-    let assessment = if delta == 0 {
-        "no change"
-    } else if (delta > 0) == positive_is_good {
-        "good"
-    } else {
-        "bad"
-    };
-
     println!(
-        "  {:<20}  {}{} {}  ({})",
-        label, sign, delta, arrow, assessment
+        "  {:<20}  {}",
+        label.dimmed(),
+        ui::delta(delta, positive_is_good)
     );
 }
 

@@ -1,7 +1,9 @@
 use crate::config::Config;
 use crate::store::{DailySummary, Store};
+use crate::ui;
 use anyhow::Result;
 use chrono::{Local, NaiveDate};
+use colored::Colorize;
 use std::io::Write;
 
 pub fn daily_report(store: &Store, _config: &Config, date: Option<&str>) -> Result<()> {
@@ -20,87 +22,104 @@ pub fn daily_report(store: &Store, _config: &Config, date: Option<&str>) -> Resu
 
     writeln!(
         out,
-        "\n  drift, daily report for {}\n",
-        date.format("%A, %B %d, %Y")
+        "\n  {}",
+        format!("drift, report — {}", date.format("%A, %B %d, %Y"))
+            .cyan()
+            .bold()
     )?;
-    writeln!(out, "  ─────────────────────────────────────\n")?;
+    writeln!(out, "  {}\n", "─".repeat(37).dimmed())?;
 
-    // Overview
     writeln!(
         out,
-        "  Tracked time:     {}",
+        "  {:<18} {}",
+        "Tracked".dimmed(),
         format_duration(summary.total_tracked)
     )?;
-    writeln!(out, "  Context switches: {}", summary.switch_count)?;
     writeln!(
         out,
-        "  Focus loss:       {}",
+        "  {:<18} {}",
+        "Switches".dimmed(),
+        summary.switch_count
+    )?;
+    writeln!(
+        out,
+        "  {:<18} {}",
+        "Focus loss".dimmed(),
         format_duration(summary.focus_loss)
     )?;
-    writeln!(out, "  Focus score:      {}/100\n", summary.focus_score)?;
+    writeln!(
+        out,
+        "  {:<18} {}\n",
+        "Score".dimmed(),
+        ui::focus_score(summary.focus_score)
+    )?;
 
-    // Category breakdown
-    writeln!(out, "  Time by category:\n")?;
+    writeln!(out, "  {}\n", "Time by category".dimmed())?;
     for (cat, dur) in &summary.by_category {
         let pct = if summary.total_tracked > 0 {
             (*dur as f64 / summary.total_tracked as f64) * 100.0
         } else {
             0.0
         };
-        let bar_len = (pct / 5.0) as usize;
-        let bar: String = "█".repeat(bar_len);
+        let bar = ui::bar(pct, 20);
         writeln!(
             out,
-            "    {:<14} {} {:>5}  ({:.0}%)",
-            cat,
+            "    {:<14} {} {:>6}  {}",
+            ui::category_color(cat),
             bar,
             format_duration(*dur),
-            pct
+            format!("({:.0}%)", pct).dimmed()
         )?;
     }
 
-    // Timeline
     if !activities.is_empty() {
-        writeln!(out, "\n  Activity timeline:\n")?;
+        writeln!(out, "\n  {}\n", "Timeline".dimmed())?;
         for a in &activities {
             writeln!(
                 out,
                 "    {}  {:<20}  {}",
-                a.timestamp.format("%H:%M"),
+                a.timestamp.format("%H:%M").to_string().dimmed(),
                 a.app_name,
-                a.category
+                ui::category_color(&a.category)
             )?;
         }
     }
 
-    // Switches
     if !switches.is_empty() {
-        writeln!(out, "\n  Context switches:\n")?;
+        writeln!(out, "\n  {}\n", "Switches".dimmed())?;
         for s in &switches {
+            let cost = if s.cost_mins >= 20 {
+                format!("{}min", s.cost_mins).red().to_string()
+            } else {
+                format!("{}min", s.cost_mins).dimmed().to_string()
+            };
             writeln!(
                 out,
-                "    {}  {} -> {}  ({}min loss)",
-                s.timestamp.format("%H:%M"),
-                s.from_category,
-                s.to_category,
-                s.cost_mins
+                "    {}  {} {} {}  ({})",
+                s.timestamp.format("%H:%M").to_string().dimmed(),
+                ui::category_color(&s.from_category),
+                "→".dimmed(),
+                ui::category_color(&s.to_category),
+                cost
             )?;
         }
     }
 
-    // Insights
-    writeln!(out, "\n  Insights:\n")?;
+    writeln!(out, "\n  {}\n", "Insights".dimmed())?;
     if summary.focus_score >= 70 {
-        writeln!(out, "    [+] Strong focus day. Keep it up.")?;
+        writeln!(out, "    {} Strong focus day.", "+".green().bold())?;
     } else if summary.focus_score >= 40 {
         writeln!(
             out,
-            "    [~] Mixed focus. More deep work blocks could help."
+            "    {} Mixed focus. More deep work blocks could help.",
+            "~".yellow()
         )?;
     } else {
         writeln!(
             out,
-            "    [!] High distraction. Consider focus mode: drift focus 90"
+            "    {} High distraction. Try: {}",
+            "!".red().bold(),
+            "drift focus 90".cyan()
         )?;
     }
 
@@ -113,14 +132,20 @@ pub fn daily_report(store: &Store, _config: &Config, date: Option<&str>) -> Resu
     if distraction_time > 0 && summary.total_tracked > 0 {
         let pct = (distraction_time as f64 / summary.total_tracked as f64) * 100.0;
         if pct > 20.0 {
-            writeln!(out, "    [!] {:.0}% of your day was distraction.", pct)?;
+            writeln!(
+                out,
+                "    {} {:.0}% of your day was distraction.",
+                "!".red(),
+                pct
+            )?;
         }
     }
 
     if summary.switch_count > 30 {
         writeln!(
             out,
-            "    [!] {} switches is above average. Try batching communication.",
+            "    {} {} switches — try batching communication.",
+            "!".yellow(),
             summary.switch_count
         )?;
     }
@@ -144,37 +169,23 @@ pub fn export(store: &Store, _config: &Config, format: &str, date: Option<&str>)
 
     match format.to_lowercase().as_str() {
         "json" => {
-            writeln!(out, "{{")?;
-            writeln!(out, "  \"date\": \"{}\",", date)?;
-            writeln!(out, "  \"activities\": [")?;
-            for (i, a) in activities.iter().enumerate() {
-                write!(
-                    out,
-                    "    {{\"timestamp\": \"{}\", \"app\": \"{}\", \"title\": \"{}\", \"category\": \"{}\", \"duration_secs\": {}}}",
-                    a.timestamp, a.app_name, a.window_title, a.category, a.duration_secs
-                )?;
-                if i < activities.len() - 1 {
-                    writeln!(out, ",")?;
-                } else {
-                    writeln!(out)?;
-                }
-            }
-            writeln!(out, "  ],")?;
-            writeln!(out, "  \"switches\": [")?;
-            for (i, s) in switches.iter().enumerate() {
-                write!(
-                    out,
-                    "    {{\"timestamp\": \"{}\", \"from\": \"{}\", \"to\": \"{}\", \"cost_mins\": {}}}",
-                    s.timestamp, s.from_category, s.to_category, s.cost_mins
-                )?;
-                if i < switches.len() - 1 {
-                    writeln!(out, ",")?;
-                } else {
-                    writeln!(out)?;
-                }
-            }
-            writeln!(out, "  ]")?;
-            writeln!(out, "}}")?;
+            let json = serde_json::json!({
+                "date": date.to_string(),
+                "activities": activities.iter().map(|a| serde_json::json!({
+                    "timestamp": a.timestamp.to_string(),
+                    "app": a.app_name,
+                    "title": a.window_title,
+                    "category": a.category,
+                    "duration_secs": a.duration_secs
+                })).collect::<Vec<_>>(),
+                "switches": switches.iter().map(|s| serde_json::json!({
+                    "timestamp": s.timestamp.to_string(),
+                    "from": s.from_category,
+                    "to": s.to_category,
+                    "cost_mins": s.cost_mins
+                })).collect::<Vec<_>>()
+            });
+            writeln!(out, "{}", serde_json::to_string_pretty(&json)?)?;
         }
         "csv" => {
             writeln!(
@@ -223,8 +234,8 @@ pub fn weekly_report(store: &Store, _config: &Config) -> Result<()> {
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
 
-    writeln!(out, "\n  drift, weekly report\n")?;
-    writeln!(out, "  ─────────────────────────────────────\n")?;
+    writeln!(out, "\n  {}", "drift, weekly report".cyan().bold())?;
+    writeln!(out, "  {}\n", "─".repeat(37).dimmed())?;
 
     let mut week_scores: Vec<u64> = Vec::new();
     let mut week_switches: u64 = 0;
@@ -232,13 +243,13 @@ pub fn weekly_report(store: &Store, _config: &Config) -> Result<()> {
     let mut week_tracked: u64 = 0;
     let mut distraction_total: u64 = 0;
 
-    writeln!(out, "  Last 7 days:\n")?;
+    writeln!(out, "  {}\n", "Last 7 days".dimmed())?;
     writeln!(
         out,
         "  {:<12}  {:<6}  {:<8}  {:<10}  {:<10}",
-        "Date", "Score", "Switches", "Focus Loss", "Tracked"
+        "Date", "Score", "Switch", "Loss", "Tracked"
     )?;
-    writeln!(out, "  {}", "─".repeat(54))?;
+    writeln!(out, "  {}", "─".repeat(54).dimmed())?;
 
     for i in (0..7).rev() {
         let date = today - chrono::Duration::days(i as i64);
@@ -258,7 +269,7 @@ pub fn weekly_report(store: &Store, _config: &Config) -> Result<()> {
             out,
             "  {:<12}  {:<6}  {:<8}  {:<10}  {:<10}",
             date.format("%a %b %d").to_string(),
-            summary.focus_score,
+            ui::focus_score(summary.focus_score),
             summary.switch_count,
             format_duration(summary.focus_loss),
             format_duration(summary.total_tracked)
@@ -284,33 +295,47 @@ pub fn weekly_report(store: &Store, _config: &Config) -> Result<()> {
     };
 
     let trend = if avg_score > prev_avg {
-        "↑ better"
+        "↑ better".green().to_string()
     } else if avg_score < prev_avg {
-        "↓ worse"
+        "↓ worse".red().to_string()
     } else {
-        "→ same"
+        "→ same".dimmed().to_string()
     };
 
-    writeln!(out, "\n  Weekly summary:\n")?;
-    writeln!(out, "    Avg focus score:  {}/100  ({})", avg_score, trend)?;
-    writeln!(out, "    Total switches:   {}", week_switches)?;
+    writeln!(out, "\n  {}\n", "Summary".dimmed())?;
     writeln!(
         out,
-        "    Total focus loss:  {}",
+        "    {:<18} {} ({})",
+        "Avg focus score".dimmed(),
+        ui::focus_score(avg_score),
+        trend
+    )?;
+    writeln!(
+        out,
+        "    {:<18} {}",
+        "Total switches".dimmed(),
+        week_switches
+    )?;
+    writeln!(
+        out,
+        "    {:<18} {}",
+        "Total focus loss".dimmed(),
         format_duration(week_focus_loss)
     )?;
     writeln!(
         out,
-        "    Total tracked:     {}",
+        "    {:<18} {}",
+        "Total tracked".dimmed(),
         format_duration(week_tracked)
     )?;
     writeln!(
         out,
-        "    Distraction time:  {}",
-        format_duration(distraction_total)
+        "    {:<18} {}",
+        "Distraction".dimmed(),
+        format_duration(distraction_total).red()
     )?;
 
-    writeln!(out, "\n  Top distractions this week:\n")?;
+    writeln!(out, "\n  {}\n", "Top distractions".dimmed())?;
     let mut distraction_apps: std::collections::HashMap<String, u64> =
         std::collections::HashMap::new();
     for i in (0..7).rev() {
@@ -326,15 +351,21 @@ pub fn weekly_report(store: &Store, _config: &Config) -> Result<()> {
     top_distractions.sort_by_key(|b| std::cmp::Reverse(b.1));
     top_distractions.truncate(5);
     for (app, dur) in &top_distractions {
-        writeln!(out, "    {:<20} {}", app, format_duration(*dur))?;
+        writeln!(
+            out,
+            "    {:<20} {}",
+            app.red(),
+            format_duration(*dur).dimmed()
+        )?;
     }
 
     let streaks = store.streak_history(7)?;
     let best_streak = streaks.iter().map(|(_, s)| *s).max().unwrap_or(0);
     writeln!(
         out,
-        "\n  Best focus streak: {}\n",
-        format_duration(best_streak)
+        "\n  {}:  {}\n",
+        "Best streak".dimmed(),
+        format_duration(best_streak).green().bold()
     )?;
 
     writeln!(out)?;
