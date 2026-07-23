@@ -1,147 +1,70 @@
-# drift-tracker
+# drift
 
-> Developer-focused context switch tracker. Quantify your focus loss.
+**Developer-focused context switch tracker. Quantify your focus loss.**
 
-[![CI](https://github.com/christiankbr/drift/actions/workflows/ci.yml/badge.svg)](https://github.com/christiankbr/drift/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Crates.io](https://img.shields.io/crates/v/drift-tracker.svg)](https://crates.io/crates/drift-tracker)
-[![Crates.io Downloads](https://img.shields.io/crates/d/drift-tracker.svg)](https://crates.io/crates/drift-tracker)
+[![Crates.io](https://img.shields.io/crates/v/drift-tracker)](https://crates.io/crates/drift-tracker)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Build](https://github.com/Christiankbr/drift/actions/workflows/ci.yml/badge.svg)](https://github.com/Christiankbr/drift/actions)
 
-**drift** is a terminal-native productivity tool that tracks your active window, detects context switches, and tells you exactly how much your attention is drifting.
+Drift tracks your active window/app, detects context switches, quantifies focus loss, and shows you exactly how much your attention is... drifting.
 
-🌐 **Landing page:** <https://christiankbr.github.io/drift>
+## Install
 
-## Why?
-
-Research shows it takes **~23 minutes** to refocus after a context switch. Yet developers switch between code, Slack, Twitter, and email hundreds of times per day. drift makes that cost visible.
-
-## Features
-
-- **Background tracking**: Monitors your active window/app every 2 seconds
-- **Context switch detection**: Classifies apps into categories (code, distraction, communication, research, system)
-- **Focus score**: 0-100 score based on switch count, distraction time, and focus loss
-- **TUI dashboard**: Real-time terminal UI with category breakdowns and switch history
-- **Daily reports**: Detailed breakdown of your day with insights
-- **Weekly reports**: 7-day summary with trend analysis and top distractions
-- **Insights**: Smart analysis of your patterns — best focus time, top distractions, weekday productivity
-- **Compare**: Side-by-side comparison of two days or two weeks with delta metrics
-- **Focus mode**: Start a timed focus session and track interruptions
-- **Live watch mode**: See your active window and focus streak in real-time
-- **Streak tracking**: Longest consecutive focus streak per day with goals
-- **Config presets**: development, writing, research presets out of the box
-- **Shell completions**: bash, zsh, fish, and PowerShell support
-- **Alerts**: Desktop notifications when you get distracted (rate-limited)
-- **Export**: JSON or CSV export of your data
-- **Cross-platform**: Linux (X11), macOS, and Windows
-
-## Installation
-
-### From crates.io
-
-```bash
+```sh
 cargo install drift-tracker
 ```
 
-### From source
+Or from source:
 
-```bash
-git clone https://github.com/christiankbr/drift.git
+```sh
+git clone https://github.com/Christiankbr/drift
 cd drift
-cargo build --release
-# Binary is at target/release/drift-tracker
+cargo install --path .
 ```
 
-### Shell Completions
+## Quick Start
 
-After installing, generate shell completions:
-
-```bash
-# Bash
-drift completions bash >> ~/.bashrc
-
-# Zsh
-drift completions zsh > ~/.zfunc/_drift
-# Make sure ~/.zfunc is in your fpath:
-#   fpath+=~/.zfunc
-#   autoload -Uz compinit && compinit
-
-# Fish
-drift completions fish > ~/.config/fish/completions/drift.fish
-
-# PowerShell
-drift completions powershell | Out-String | Invoke-Expression
+```sh
+drift init              # Interactive setup wizard
+drift daemon start      # Start background tracker
+drift status            # Check today's focus
+drift report            # Daily report with timeline
+drift insights          # 7-day pattern analysis
 ```
 
-## Usage
+## Commands
 
-```bash
-# Initialize config
-drift init
+| Command | Description |
+|---|---|
+| `drift init` | Interactive setup wizard |
+| `drift track` | Start foreground tracker (blocks terminal) |
+| `drift daemon start/stop/status` | Background daemon with PID management |
+| `drift status [--json]` | Today's focus summary |
+| `drift report [-d YYYY-MM-DD]` | Daily report with categories, switches, insights |
+| `drift week` | Weekly report with trend comparison |
+| `drift summary [-d N]` | N-day summary with averages and trend |
+| `drift timeline [-d YYYY-MM-DD]` | Hourly ASCII bar chart of the day |
+| `drift avg` | Rolling averages (7d, 14d, 30d) |
+| `drift insights` | 7-day pattern analysis (best hours, top distractions) |
+| `drift compare --date1 X --date2 Y` | Compare two days |
+| `drift compare --week` | Compare this week vs last week |
+| `drift streaks [-d N]` | Streak history with progress bars |
+| `drift goals` | Daily goals tracker (focus time, switches, distraction) |
+| `drift log [-d DATE] [-c CAT] [-S] [-n N]` | Raw activity/switch logs |
+| `drift focus N` | Start N-minute focus session |
+| `drift watch` | Live active window monitor |
+| `drift show` | TUI dashboard |
+| `drift export -f json/csv [-d DATE]` | Export data |
+| `drift config show/edit/path` | View and modify config |
+| `drift ignore add/remove/list` | Manage ignored apps |
+| `drift preset development/writing/research` | Apply config preset |
+| `drift doctor` | Diagnostics: config, DB, daemon, tracker, display |
+| `drift reset [--yes]` | Wipe tracking data |
+| `drift completions bash/zsh/fish/powershell` | Shell completions |
 
-# Apply a preset (development, writing, research)
-drift preset development
+## Config
 
-# List available presets
-drift presets
-
-# Start background tracker
-drift track
-
-# Start tracker with desktop alerts on distraction
-drift track --alert
-
-# Live watch mode
-drift watch
-
-# Open TUI dashboard
-drift show
-
-# Show current status (with streak goal)
-drift status
-
-# Show streak history with goals
-drift streaks
-drift streaks --days=14
-
-# Daily report
-drift report
-
-# Weekly report with trend
-drift week
-
-# Smart insights from last 7 days
-drift insights
-
-# Compare two days
-drift compare --date1=2026-07-20 --date2=2026-07-22
-
-# Compare this week vs last week
-drift compare --week
-
-# Start focus mode for 90 minutes
-drift focus 90
-
-# Export today's data as JSON
-drift export --format=json
-
-# Export specific date as CSV
-drift export --format=csv --date=2026-07-22
-
-# Generate shell completions
-drift completions bash
-```
-
-## Config Presets
-
-**development** — Software developer focused on deep work. Strict distraction blocking. 90min streak goal.
-
-**writing** — Writer/researcher. Browsers are research, not distraction. 60min streak goal.
-
-**research** — Researcher/academic. Lenient on browser switching. 45min streak goal.
-
-## Configuration
-
-drift creates a config at `~/.config/drift/config.toml`:
+Config lives at `~/.config/drift/config.toml`:
 
 ```toml
 poll_interval_secs = 2
@@ -149,16 +72,47 @@ switching_cost_mins = 23
 streak_goal_mins = 90
 
 [categories]
-code = ["code", "vim", "neovim", "idea", "terminal"]
-distraction = ["twitter", "reddit", "youtube", "discord"]
-communication = ["slack", "teams", "zoom"]
-research = ["firefox", "chrome"]
-system = ["finder", "settings"]
+code = ["code", "vim", "neovim", "terminal", "cursor", "zed"]
+distraction = ["twitter", "youtube", "reddit", "discord"]
+communication = ["slack", "teams", "zoom", "telegram"]
+research = ["firefox", "chrome", "brave", "safari"]
+system = ["finder", "nautilus", "explorer", "settings"]
 
+ignored_apps = ["screensaver"]
 focus_block = ["discord", "telegram"]
 ```
 
-Data is stored in SQLite at `~/.local/share/drift/drift.db`.
+`.driftignore` file (one app per line, `#` for comments):
+
+```
+# Apps that shouldn't be tracked
+screensaver
+lockscreen
+```
+
+## Config Import/Export
+
+```sh
+drift export-config           # Print config as JSON
+drift export-config -o cfg.json   # Save to file
+drift import cfg.json          # Load config from JSON
+```
+
+## How It Works
+
+Drift polls your active window every N seconds (default 2), classifies it into a category (code, distraction, communication, research, system, other), and records:
+
+- **Activities**: What app you used, for how long, in which category
+- **Switches**: When you switched between categories, with a focus cost
+- **Focus sessions**: Timed deep-work blocks with switch tracking
+
+The focus score (0-100) is calculated from distraction ratio, focus loss, and switch count. Context switch cost defaults to 23 minutes (based on research), adjusted by switch type.
+
+## Platforms
+
+- **Linux**: x11rb + xdotool fallback
+- **macOS**: Cocoa/objc
+- **Windows**: Win32 API
 
 ## License
 

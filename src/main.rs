@@ -7,6 +7,7 @@ mod compare;
 mod completions;
 mod config;
 mod daemon;
+mod extra;
 mod focus;
 mod init;
 mod insights;
@@ -156,6 +157,42 @@ enum Commands {
         /// App name to add/remove
         app: Option<String>,
     },
+    /// Show hourly timeline for a day
+    Timeline {
+        /// Date in YYYY-MM-DD format (default: today)
+        #[arg(short, long)]
+        date: Option<String>,
+    },
+    /// Show summary with trends (last N days)
+    Summary {
+        /// Number of days to show (default: 14)
+        #[arg(short, long, default_value = "14")]
+        days: u32,
+    },
+    /// Show rolling averages (7d, 14d, 30d)
+    Avg,
+    /// Show or set daily goals
+    Goals {
+        /// Action: show or set
+        action: Option<String>,
+        /// Goal key to set
+        key: Option<String>,
+        /// Goal value
+        value: Option<String>,
+    },
+    /// Run diagnostics
+    Doctor,
+    /// Import config from JSON file
+    Import {
+        /// Path to JSON config file
+        path: String,
+    },
+    /// Export config as JSON
+    ExportConfig {
+        /// Output path (default: stdout)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -255,6 +292,56 @@ fn main() -> Result<()> {
         }
         Some(Commands::Ignore { action, app }) => {
             handle_ignore(action, app)?;
+        }
+        Some(Commands::Timeline { date }) => {
+            let config = config::Config::load()?;
+            let store = store::Store::open(&config.db_path())?;
+            extra::timeline(&store, &config, date.as_deref())?;
+        }
+        Some(Commands::Summary { days }) => {
+            let config = config::Config::load()?;
+            let store = store::Store::open(&config.db_path())?;
+            extra::summary(&store, &config, days)?;
+        }
+        Some(Commands::Avg) => {
+            let config = config::Config::load()?;
+            let store = store::Store::open(&config.db_path())?;
+            extra::rolling_avg(&store, &config)?;
+        }
+        Some(Commands::Goals { action, key, value }) => {
+            let config = config::Config::load()?;
+            let store = store::Store::open(&config.db_path())?;
+            extra::goals(
+                &store,
+                &config,
+                action.as_deref(),
+                key.as_deref(),
+                value.as_deref(),
+            )?;
+        }
+        Some(Commands::Doctor) => {
+            extra::doctor()?;
+        }
+        Some(Commands::Import { path }) => {
+            let content = std::fs::read_to_string(&path)?;
+            let config: config::Config = serde_json::from_str(&content)?;
+            config.save()?;
+            println!("  {} Config imported from {}", "✓".green().bold(), path);
+            println!(
+                "  poll: {}s, cost: {}min, goal: {}min",
+                config.poll_interval_secs, config.switching_cost_mins, config.streak_goal_mins
+            );
+        }
+        Some(Commands::ExportConfig { output }) => {
+            let config = config::Config::load()?;
+            let json = serde_json::to_string_pretty(&config)?;
+            match output {
+                Some(path) => {
+                    std::fs::write(&path, &json)?;
+                    println!("  {} Config exported to {}", "✓".green().bold(), path);
+                }
+                None => println!("{}", json),
+            }
         }
         _ => {
             let config = config::Config::load()?;
