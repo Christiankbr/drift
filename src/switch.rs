@@ -70,3 +70,57 @@ pub fn longest_focus_streak(activities: &[crate::store::ActivityEntry]) -> u64 {
 
     max_streak
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_switch_cost_focus_to_distraction() {
+        assert_eq!(switch_cost(Category::Code, Category::Distraction, 23), 23);
+        assert_eq!(
+            switch_cost(Category::Research, Category::Distraction, 23),
+            23
+        );
+    }
+
+    #[test]
+    fn test_switch_cost_to_communication() {
+        assert_eq!(switch_cost(Category::Code, Category::Communication, 23), 23);
+    }
+
+    #[test]
+    fn test_switch_cost_distraction_to_code() {
+        assert_eq!(switch_cost(Category::Distraction, Category::Code, 23), 23);
+    }
+
+    #[test]
+    fn test_switch_cost_comm_to_code() {
+        assert_eq!(
+            switch_cost(Category::Communication, Category::Code, 23),
+            (23 * 2) / 3
+        );
+    }
+
+    #[test]
+    fn test_switch_cost_code_to_research() {
+        assert_eq!(switch_cost(Category::Code, Category::Research, 23), 23 / 4);
+        assert_eq!(switch_cost(Category::Research, Category::Code, 23), 23 / 4);
+    }
+
+    #[test]
+    fn test_switch_cost_same_category() {
+        assert_eq!(switch_cost(Category::Code, Category::Code, 23), 0);
+    }
+
+    #[test]
+    fn test_switch_cost_system_low() {
+        assert_eq!(switch_cost(Category::System, Category::Code, 23), 23 / 5);
+        assert_eq!(switch_cost(Category::Code, Category::System, 23), 23 / 5);
+    }
+
+    #[test]
+    fn test_switch_cost_other() {
+        assert_eq!(switch_cost(Category::Other, Category::Code, 23), 23 / 3);
+    }
+}

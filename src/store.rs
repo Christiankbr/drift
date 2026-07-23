@@ -295,6 +295,71 @@ impl Store {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tmp_store() -> (Store, tempfile::NamedTempFile) {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let store = Store::open(tmp.path()).unwrap();
+        (store, tmp)
+    }
+
+    #[test]
+    fn test_insert_and_query_activity() {
+        let (store, _tmp) = tmp_store();
+        let date = chrono::Local::now().date_naive();
+        let ts = date.and_hms_opt(10, 0, 0).unwrap();
+        store
+            .insert_activity(ts, "code", "main.rs", Category::Code, 120)
+            .unwrap();
+        let activities = store.activities_for_date(date).unwrap();
+        assert_eq!(activities.len(), 1);
+        assert_eq!(activities[0].app_name, "code");
+        assert_eq!(activities[0].duration_secs, 120);
+    }
+
+    #[test]
+    fn test_insert_and_query_switch() {
+        let (store, _tmp) = tmp_store();
+        let date = chrono::Local::now().date_naive();
+        let ts = date.and_hms_opt(10, 0, 0).unwrap();
+        store
+            .insert_switch(ts, Category::Code, Category::Distraction, 23)
+            .unwrap();
+        let switches = store.switches_for_date(date).unwrap();
+        assert_eq!(switches.len(), 1);
+        assert_eq!(switches[0].from_category, "code");
+        assert_eq!(switches[0].to_category, "distraction");
+        assert_eq!(switches[0].cost_mins, 23);
+    }
+
+    #[test]
+    fn test_empty_date_returns_empty() {
+        let (store, _tmp) = tmp_store();
+        let date = chrono::Local::now().date_naive();
+        let activities = store.activities_for_date(date).unwrap();
+        assert!(activities.is_empty());
+        let switches = store.switches_for_date(date).unwrap();
+        assert!(switches.is_empty());
+    }
+
+    #[test]
+    fn test_focus_session_lifecycle() {
+        let (store, _tmp) = tmp_store();
+        let id = store.start_focus_session(25).unwrap();
+        store.end_focus_session(id, false, 2).unwrap();
+    }
+
+    #[test]
+    fn test_longest_streak_no_data() {
+        let (store, _tmp) = tmp_store();
+        let date = chrono::Local::now().date_naive();
+        let streak = store.longest_streak_for_date(date).unwrap();
+        assert_eq!(streak, 0);
+    }
+}
+
 impl DailySummary {
     pub fn for_date(store: &Store, date: NaiveDate) -> Result<Self> {
         let activities = store.activities_for_date(date)?;

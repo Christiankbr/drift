@@ -127,6 +127,9 @@ enum Commands {
         /// Number of entries to show (default: 50)
         #[arg(short, long, default_value = "50")]
         limit: usize,
+        /// Show switches instead of activities
+        #[arg(short = 'S', long)]
+        switches: bool,
     },
     /// Reset tracking data (with confirmation)
     Reset {
@@ -145,6 +148,13 @@ enum Commands {
         /// Compare this week vs last week
         #[arg(long)]
         week: bool,
+    },
+    /// Manage ignored apps (.driftignore)
+    Ignore {
+        /// Action: add, remove, or list
+        action: String,
+        /// App name to add/remove
+        app: Option<String>,
     },
 }
 
@@ -225,10 +235,15 @@ fn main() -> Result<()> {
             date,
             category,
             limit,
+            switches,
         }) => {
             let config = config::Config::load()?;
             let store = store::Store::open(&config.db_path())?;
-            show_log(&store, date.as_deref(), category.as_deref(), limit)?;
+            if switches {
+                show_switch_log(&store, date.as_deref(), limit)?;
+            } else {
+                show_log(&store, date.as_deref(), category.as_deref(), limit)?;
+            }
         }
         Some(Commands::Reset { yes }) => {
             handle_reset(yes)?;
@@ -237,6 +252,9 @@ fn main() -> Result<()> {
             let config = config::Config::load()?;
             let store = store::Store::open(&config.db_path())?;
             compare::compare(&store, &config, date1.as_deref(), date2.as_deref(), week)?;
+        }
+        Some(Commands::Ignore { action, app }) => {
+            handle_ignore(action, app)?;
         }
         _ => {
             let config = config::Config::load()?;
@@ -350,6 +368,19 @@ fn print_status(store: &store::Store, config: &config::Config) -> Result<()> {
     let streak = store.longest_streak_for_date(today)?;
 
     println!("\n  {}\n", "drift, status".cyan().bold());
+
+    // Daemon status
+    if daemon::is_running() {
+        let pid = daemon::read_pid().unwrap_or(-1);
+        println!(
+            "  {} {}",
+            "Daemon".dimmed(),
+            format!("running (pid: {})", pid).green().bold()
+        );
+    } else {
+        println!("  {} {}", "Daemon".dimmed(), "not running".dimmed());
+    }
+
     println!("  {} {}", "Date".dimmed(), today.format("%Y-%m-%d"));
     println!(
         "  {}     {}",
@@ -427,7 +458,9 @@ fn handle_config(action: Option<&str>, key: Option<&str>, value: Option<&str>) -
                 (Some(k), Some(v)) => (k, v),
                 _ => {
                     eprintln!("  Usage: drift config edit <key> <value>");
-                    eprintln!("  Keys: poll_interval_secs, switching_cost_mins, streak_goal_mins");
+                    eprintln!("  Keys: poll_interval_secs, switching_cost_mins, streak_goal_mins,");
+                    eprintln!("        add_ignore <app>, remove_ignore <app>,");
+                    eprintln!("        add_focus_block <app>, remove_focus_block <app>");
                     std::process::exit(1);
                 }
             };
@@ -436,10 +469,29 @@ fn handle_config(action: Option<&str>, key: Option<&str>, value: Option<&str>) -
                 "poll_interval_secs" => config.poll_interval_secs = value.parse()?,
                 "switching_cost_mins" => config.switching_cost_mins = value.parse()?,
                 "streak_goal_mins" => config.streak_goal_mins = value.parse()?,
+                "add_ignore" => {
+                    if !config.ignored_apps.iter().any(|a| a == value) {
+                        config.ignored_apps.push(value.to_string());
+                    }
+                }
+                "remove_ignore" => {
+                    config.ignored_apps.retain(|a| a != value);
+                }
+                "add_focus_block" => {
+                    if !config.focus_block.iter().any(|a| a == value) {
+                        config.focus_block.push(value.to_string());
+                    }
+                }
+                "remove_focus_block" => {
+                    config.focus_block.retain(|a| a != value);
+                }
                 other => {
                     eprintln!("  [!] Unknown key: {}", other);
                     eprintln!(
-                        "      Keys: poll_interval_secs, switching_cost_mins, streak_goal_mins"
+                        "      Keys: poll_interval_secs, switching_cost_mins, streak_goal_mins,"
+                    );
+                    eprintln!(
+                        "            add_ignore, remove_ignore, add_focus_block, remove_focus_block"
                     );
                     std::process::exit(1);
                 }
@@ -516,6 +568,52 @@ fn show_log(
     Ok(())
 }
 
+fn show_switch_log(store: &store::Store, date: Option<&str>, limit: usize) -> Result<()> {
+    let date = if let Some(d) = date {
+        chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")?
+    } else {
+        chrono::Local::now().date_naive()
+    };
+
+    let switches = store.switches_for_date(date)?;
+
+    println!(
+        "\n  {}\n",
+        format!("drift switches, {}", date.format("%Y-%m-%d"))
+            .cyan()
+            .bold()
+    );
+    println!("  {}", "─".repeat(37).dimmed());
+
+    if switches.is_empty() {
+        println!("  {}", "No switches found.".dimmed());
+        println!();
+        return Ok(());
+    }
+
+    let count = switches.len().min(limit);
+    println!("  {} switches (showing {})\n", switches.len(), count);
+
+    for s in switches.iter().take(limit) {
+        let cost = if s.cost_mins >= 20 {
+            format!("{}min", s.cost_mins).red().to_string()
+        } else {
+            format!("{}min", s.cost_mins).dimmed().to_string()
+        };
+        println!(
+            "  {}  {} {} {}  ({})",
+            s.timestamp.format("%H:%M:%S").to_string().dimmed(),
+            ui::category_color(&s.from_category),
+            "→".dimmed(),
+            ui::category_color(&s.to_category),
+            cost
+        );
+    }
+    println!();
+
+    Ok(())
+}
+
 fn handle_reset(yes: bool) -> Result<()> {
     if !yes {
         use std::io::{self, Write};
@@ -537,6 +635,59 @@ fn handle_reset(yes: bool) -> Result<()> {
     println!("  {} All tracking data reset.", "Done.".green().bold());
     println!("  DB: {}", db_path.display());
     println!();
+    Ok(())
+}
+
+fn handle_ignore(action: String, app: Option<String>) -> Result<()> {
+    let mut config = config::Config::load()?;
+    match action.as_str() {
+        "add" => {
+            let app =
+                app.ok_or_else(|| anyhow::anyhow!("App name required: drift ignore add <app>"))?;
+            if !config.ignored_apps.iter().any(|a| a == &app) {
+                config.ignored_apps.push(app.clone());
+                config.save()?;
+                println!("  {} Added {} to ignore list", "+".green().bold(), app);
+            } else {
+                println!("  {} Already in ignore list: {}", "~".yellow(), app);
+            }
+        }
+        "remove" => {
+            let app =
+                app.ok_or_else(|| anyhow::anyhow!("App name required: drift ignore remove <app>"))?;
+            let before = config.ignored_apps.len();
+            config.ignored_apps.retain(|a| a != &app);
+            if config.ignored_apps.len() < before {
+                config.save()?;
+                println!("  {} Removed {} from ignore list", "-".red().bold(), app);
+            } else {
+                println!("  {} Not in ignore list: {}", "~".yellow(), app);
+            }
+        }
+        "list" => {
+            let ignored = config.load_driftignore();
+            let combined: std::collections::HashSet<String> = config
+                .ignored_apps
+                .iter()
+                .map(|s| s.to_lowercase())
+                .chain(ignored.iter().cloned())
+                .collect();
+            println!("\n  {}\n", "drift, ignored apps".cyan().bold());
+            if combined.is_empty() {
+                println!("  {}", "No apps ignored.".dimmed());
+            } else {
+                for app in &combined {
+                    println!("    {}", app);
+                }
+            }
+            println!();
+        }
+        other => {
+            eprintln!("  [!] Unknown action: {}", other);
+            eprintln!("      Use: add, remove, or list");
+            std::process::exit(1);
+        }
+    }
     Ok(())
 }
 

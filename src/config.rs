@@ -364,3 +364,80 @@ impl std::fmt::Display for Category {
         write!(f, "{}", self.as_str())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_classify_code_apps() {
+        let config = Config::default();
+        assert_eq!(config.classify("code"), Category::Code);
+        assert_eq!(config.classify("neovim"), Category::Code);
+        assert_eq!(config.classify("terminal"), Category::Code);
+        assert_eq!(config.classify("cursor"), Category::Code);
+    }
+
+    #[test]
+    fn test_classify_distraction_apps() {
+        let config = Config::default();
+        assert_eq!(config.classify("twitter"), Category::Distraction);
+        assert_eq!(config.classify("youtube"), Category::Distraction);
+        assert_eq!(config.classify("discord"), Category::Distraction);
+    }
+
+    #[test]
+    fn test_classify_communication_apps() {
+        let config = Config::default();
+        assert_eq!(config.classify("slack"), Category::Communication);
+        assert_eq!(config.classify("zoom"), Category::Communication);
+    }
+
+    #[test]
+    fn test_classify_research_apps() {
+        let config = Config::default();
+        assert_eq!(config.classify("firefox"), Category::Research);
+        assert_eq!(config.classify("chrome"), Category::Research);
+    }
+
+    #[test]
+    fn test_classify_unknown_app_is_other() {
+        let config = Config::default();
+        assert_eq!(config.classify("someunknownapp"), Category::Other);
+    }
+
+    #[test]
+    fn test_is_ignored() {
+        let mut config = Config::default();
+        assert!(!config.is_ignored("code"));
+        config.ignored_apps.push("screensaver".to_string());
+        assert!(config.is_ignored("screensaver"));
+        assert!(config.is_ignored("Screensaver"));
+        assert!(!config.is_ignored("code"));
+    }
+
+    #[test]
+    fn test_category_is_focus_breaking() {
+        assert!(Category::Distraction.is_focus_breaking());
+        assert!(Category::Communication.is_focus_breaking());
+        assert!(!Category::Code.is_focus_breaking());
+        assert!(!Category::Research.is_focus_breaking());
+        assert!(!Category::System.is_focus_breaking());
+    }
+
+    #[test]
+    fn test_config_with_defaults() {
+        let config = Config {
+            poll_interval_secs: 0,
+            switching_cost_mins: 0,
+            categories: CategoryRules::default(),
+            focus_block: vec![],
+            streak_goal_mins: 0,
+            ignored_apps: vec![],
+        };
+        let with_defaults = config.with_defaults();
+        assert_eq!(with_defaults.poll_interval_secs, 2);
+        assert_eq!(with_defaults.switching_cost_mins, 23);
+        assert_eq!(with_defaults.streak_goal_mins, 90);
+    }
+}

@@ -1,10 +1,12 @@
 use anyhow::Result;
 use chrono::Local;
+use colored::Colorize;
 use std::thread;
 use std::time::Duration;
 
 use crate::config::Config;
 use crate::tracker::create_tracker;
+use crate::ui;
 
 pub fn run_watch(config: &Config) -> Result<()> {
     let tracker = create_tracker()?;
@@ -14,19 +16,25 @@ pub fn run_watch(config: &Config) -> Result<()> {
     let mut last_category: Option<crate::config::Category> = None;
     let mut category_start = Local::now();
 
-    println!("\n  drift, live watch\n");
-    println!("  ─────────────────────────────────────\n");
+    println!("\n  {}", "drift, live watch".cyan().bold());
+    println!("  {}\n", "─".repeat(37).dimmed());
     println!("  Tracking active window. Press Ctrl+C to stop.\n");
 
     loop {
         let window = match tracker.get_active_window() {
             Ok(w) => w,
             Err(e) => {
-                eprintln!("  [!] Failed to get active window: {}", e);
+                eprintln!("  {} Failed to get active window: {}", "!".red(), e);
                 thread::sleep(interval);
                 continue;
             }
         };
+
+        // Skip ignored apps
+        if config.is_ignored(&window.app_name) {
+            thread::sleep(interval);
+            continue;
+        }
 
         let category = config.classify(&window.app_name);
         let now = Local::now();
@@ -38,14 +46,21 @@ pub fn run_watch(config: &Config) -> Result<()> {
         let streak_secs = (now - category_start).num_seconds().max(0) as u64;
         let streak = format_duration(streak_secs);
 
-        // Clear line and print
         if window.app_name != last_app || last_category.unwrap_or(category) != category {
+            let cat_str = ui::category_color(category.as_str());
+            let streak_colored = if streak_secs >= 600 {
+                streak.green().bold()
+            } else if streak_secs >= 60 {
+                streak.normal()
+            } else {
+                streak.dimmed()
+            };
             println!(
-                "  {}  {:<20}  {:<14}  streak: {}",
-                now.format("%H:%M:%S"),
+                "  {}  {:<20}  {}  streak: {}",
+                now.format("%H:%M:%S").to_string().dimmed(),
                 window.app_name,
-                category,
-                streak
+                cat_str,
+                streak_colored
             );
         }
 
