@@ -1,10 +1,12 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use colored::Colorize;
 
 mod classifier;
 mod compare;
 mod completions;
 mod config;
+mod daemon;
 mod focus;
 mod init;
 mod insights;
@@ -14,6 +16,7 @@ mod store;
 mod switch;
 mod tracker;
 mod tui;
+mod ui;
 mod watch;
 
 #[derive(Parser)]
@@ -30,12 +33,23 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Start the background tracker daemon
+    /// Start the foreground tracker (blocks terminal)
     Track {
         /// Polling interval in seconds (default: 2)
         #[arg(short, long, default_value = "2")]
         interval: u64,
         /// Enable desktop alerts on distraction (rate limited: 1 per 5 min)
+        #[arg(short, long)]
+        alert: bool,
+    },
+    /// Run drift as a background daemon
+    Daemon {
+        /// Subcommand: start, stop, or status
+        action: Option<String>,
+        /// Polling interval in seconds (default: 2)
+        #[arg(short, long, default_value = "2")]
+        interval: u64,
+        /// Enable desktop alerts on distraction
         #[arg(short, long)]
         alert: bool,
     },
@@ -110,7 +124,24 @@ fn main() -> Result<()> {
 
     match cli.command {
         Some(Commands::Init) => {
-            init::init_config()?;
+            init::init_wizard()?;
+        }
+        Some(Commands::Daemon {
+            action,
+            interval,
+            alert,
+        }) => {
+            let config = config::Config::load()?;
+            match action.as_deref().unwrap_or("start") {
+                "start" => daemon::start(&config, interval, alert)?,
+                "stop" => daemon::stop()?,
+                "status" => daemon::status()?,
+                other => {
+                    eprintln!("  [!] Unknown daemon action: {}", other);
+                    eprintln!("      Use: start, stop, or status");
+                    std::process::exit(1);
+                }
+            }
         }
         Some(Commands::Presets) => {
             list_presets();
@@ -212,11 +243,14 @@ fn show_streaks(store: &store::Store, config: &config::Config, days: u32) -> Res
     let streaks = store.streak_history(days)?;
     let goal = config.streak_goal_mins;
 
-    println!("\n  drift, streak history (last {} days)\n", days);
-    println!("  ─────────────────────────────────────\n");
+    println!(
+        "\n  {}\n",
+        format!("drift, streaks (last {} days)", days).cyan().bold()
+    );
+    println!("  {}", "─".repeat(37).dimmed());
     println!("  Goal: {} minutes of uninterrupted focus\n", goal);
-    println!("  Date             Streak      Goal   Bar");
-    println!("  {}", "─".repeat(45));
+    println!("  {:<12}  {:<10}  {:<6}  Bar", "Date", "Streak", "Goal");
+    println!("  {}", "─".repeat(45).dimmed());
 
     for (date, streak) in &streaks {
         let pct = if goal > 0 {
@@ -224,15 +258,23 @@ fn show_streaks(store: &store::Store, config: &config::Config, days: u32) -> Res
         } else {
             0
         };
-        let bar_len = (pct / 5) as usize;
-        let bar: String = "█".repeat(bar_len) + &"░".repeat(20 - bar_len);
-        let achieved = if *streak >= goal * 60 { "✓" } else { " " };
+        let bar = ui::bar(pct as f64, 20);
+        let achieved = if *streak >= goal * 60 {
+            "✓".green().bold().to_string()
+        } else {
+            " ".to_string()
+        };
+        let goal_met = if *streak >= goal * 60 {
+            "met".green().to_string()
+        } else {
+            "—".dimmed().to_string()
+        };
 
         println!(
             "  {:<12}  {:<10}  {:<6}  {} {}",
             date.format("%a %b %d").to_string(),
             format_duration(*streak),
-            if *streak >= goal * 60 { "met" } else { "—" },
+            goal_met,
             bar,
             achieved
         );
@@ -245,8 +287,8 @@ fn show_streaks(store: &store::Store, config: &config::Config, days: u32) -> Res
         0
     };
 
-    println!("\n  Best streak:  {}", format_duration(best));
-    println!("  Avg streak:   {}", format_duration(avg));
+    println!("\n  Best:  {}", format_duration(best).green().bold());
+    println!("  Avg:   {}", format_duration(avg).dimmed());
     println!();
 
     Ok(())
@@ -257,27 +299,40 @@ fn print_status(store: &store::Store, config: &config::Config) -> Result<()> {
     let summary = store::DailySummary::for_date(store, today)?;
     let streak = store.longest_streak_for_date(today)?;
 
-    println!("drift, status for {}\n", today.format("%Y-%m-%d"));
+    println!("\n  {}\n", "drift, status".cyan().bold());
+    println!("  {} {}", "Date".dimmed(), today.format("%Y-%m-%d"));
     println!(
-        "  Tracked time:     {}",
+        "  {}     {}",
+        "Tracked".dimmed(),
         format_duration(summary.total_tracked)
     );
-    println!("  Context switches: {}", summary.switch_count);
+    println!("  {} {}", "Switches".dimmed(), summary.switch_count);
     println!(
-        "  Focus loss:       {}",
+        "  {}     {}",
+        "Loss".dimmed(),
         format_duration(summary.focus_loss)
     );
-    println!("  Focus score:      {}/100", summary.focus_score);
     println!(
-        "  Best streak:      {} / {}min goal",
+        "  {}     {}",
+        "Score".dimmed(),
+        ui::focus_score(summary.focus_score)
+    );
+    println!(
+        "  {}    {} / {}min",
+        "Streak".dimmed(),
         format_duration(streak),
         config.streak_goal_mins
     );
 
-    println!("\n  By category:");
+    println!("\n  {}", "By category".dimmed());
     for (cat, dur) in &summary.by_category {
-        println!("    {:<14} {}", cat, format_duration(*dur));
+        println!(
+            "    {:<14} {}",
+            ui::category_color(cat),
+            format_duration(*dur)
+        );
     }
+    println!();
 
     Ok(())
 }

@@ -70,6 +70,11 @@ pub fn run_daemon(store: &Store, config: &Config, interval_secs: u64, alert: boo
             }
         };
 
+        // Skip ignored apps (from .driftignore or config)
+        if config.is_ignored(&window.app_name) {
+            continue;
+        }
+
         let category = config.classify(&window.app_name);
         let now = Local::now().naive_local();
 

@@ -14,6 +14,8 @@ pub struct Config {
     pub focus_block: Vec<String>,
     #[serde(default = "default_streak_goal")]
     pub streak_goal_mins: u64,
+    #[serde(default)]
+    pub ignored_apps: Vec<String>,
 }
 
 fn default_streak_goal() -> u64 {
@@ -42,6 +44,7 @@ impl Default for Config {
             categories: CategoryRules::default(),
             focus_block: vec![],
             streak_goal_mins: 90,
+            ignored_apps: vec![],
         }
     }
 }
@@ -259,6 +262,33 @@ impl Config {
         self
     }
 
+    pub fn load_driftignore(&self) -> Vec<String> {
+        let path = Self::config_path()
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .join(".driftignore");
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            content
+                .lines()
+                .map(|l| l.trim().to_lowercase())
+                .filter(|l| !l.is_empty() && !l.starts_with('#'))
+                .collect()
+        } else {
+            vec![]
+        }
+    }
+
+    pub fn is_ignored(&self, app_name: &str) -> bool {
+        let name = app_name.to_lowercase();
+        self.ignored_apps
+            .iter()
+            .any(|a| name.contains(&a.to_lowercase()))
+            || {
+                let ignored = self.load_driftignore();
+                ignored.iter().any(|a| name.contains(a))
+            }
+    }
+
     pub fn from_preset(preset: &crate::presets::Preset) -> Self {
         let pc = &preset.config;
         Self {
@@ -273,6 +303,7 @@ impl Config {
             },
             focus_block: pc.focus_block.clone(),
             streak_goal_mins: pc.streak_goal_mins,
+            ignored_apps: vec![],
         }
     }
 }
